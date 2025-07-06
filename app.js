@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import connectDB from './config/db.js';
 import authRoutes from './routes/auth/authRoutes.js';
 import propertyRoutes from './routes/propertyRoutes/propertyRoutes.js';
+import paymentRoutes from './routes/payment/paymentRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -16,6 +17,7 @@ app.use(express.json());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/property', propertyRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.get('/', (req, res) => {
   res.send('API is working!');

@@ -1,0 +1,118 @@
+import mongoose from 'mongoose';
+
+const orderSchema = new mongoose.Schema({
+  // Order identification
+  orderId: {
+    type: String,
+    required: true,
+    unique: true,
+    default: () => `ORDER-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  },
+  
+  // Property reference
+  property: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'propertyCard',
+    required: true
+  },
+  
+  // Customer information
+  customer: {
+    name: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    },
+    phone: {
+      type: String,
+      required: true
+    },
+    address: {
+      street: String,
+      city: String,
+      state: String,
+      zipCode: String,
+      country: String
+    }
+  },
+  
+  // Booking details
+  booking: {
+    checkIn: {
+      type: Date,
+      required: true
+    },
+    checkOut: {
+      type: Date,
+      required: true
+    },
+    guests: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    nights: {
+      type: Number,
+      required: true
+    }
+  },
+  
+  // Payment information
+  payment: {
+    amount: {
+      type: Number,
+      required: true
+    },
+    currency: {
+      type: String,
+      required: true,
+      default: 'usd'
+    },
+    stripePaymentIntentId: {
+      type: String,
+      required: true
+    },
+    stripePaymentStatus: {
+      type: String,
+      enum: ['pending', 'succeeded', 'failed', 'canceled'],
+      default: 'pending'
+    },
+    paymentMethod: {
+      type: String,
+      default: 'card'
+    }
+  },
+  
+  // Order status
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+    default: 'pending'
+  },
+  
+  // Additional details
+  notes: {
+    type: String,
+    default: ''
+  },
+  
+  // Metadata
+  metadata: {
+    type: Map,
+    of: String,
+    default: {}
+  }
+}, { 
+  timestamps: true 
+});
+
+// Indexes for better performance
+orderSchema.index({ orderId: 1 });
+orderSchema.index({ 'customer.email': 1 });
+orderSchema.index({ 'payment.stripePaymentIntentId': 1 });
+orderSchema.index({ status: 1 });
+
+export default mongoose.model('Order', orderSchema);

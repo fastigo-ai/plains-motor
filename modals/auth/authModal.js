@@ -43,6 +43,11 @@ const userSchema = new Schema({
     type: String,
     enum: ['active', 'inactive', 'pending'],
     default: 'pending'
+  },
+  role: {
+    type: String,
+    enum: ['admin', 'customer'],
+    default: 'customer'
   }
 }, {
   timestamps: true
