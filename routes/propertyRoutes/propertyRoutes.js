@@ -5,7 +5,7 @@ import upload from '../../utils/multer.js';
 
 const router = express.Router();
 
-router.post('/add-property', addCard);
+router.post('/add-property', upload.single('image'), addCard);
 
 // Use upload.any() to accept files from any field name
 router.post('/add-property-detail', upload.any(), addListing);
