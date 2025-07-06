@@ -94,7 +94,7 @@ export const verifyOTP = async (req, res) => {
     user.status = 'active';
     await user.save();
 
-    const token = generateToken(user._id.toString());
+    const token = generateToken(user._id.toString(), user.email, user.role);
 
     res.status(200).json({
       message: 'Phone verified successfully',
@@ -106,6 +106,10 @@ export const verifyOTP = async (req, res) => {
         email: user.email,
         isPhoneVerified: user.isPhoneVerified,
         status: user.status,
+        role: user.role,
+        phoneVerifiedAt: user.phoneVerifiedAt,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
     });
   } catch (error) {

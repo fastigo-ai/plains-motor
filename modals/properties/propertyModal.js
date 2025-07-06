@@ -1,3 +1,4 @@
+// models/PropertyCard.js
 import mongoose from 'mongoose';
 
 const propertyCardSchema = new mongoose.Schema({
@@ -29,11 +30,18 @@ const propertyCardSchema = new mongoose.Schema({
     default: null,
   },
 
-  // 💡 Reference to detail document
+  // 🔗 Reference to category
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: true,
+  },
+
+  // 🔗 Reference to detail
   detail: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'propertyDetail',
-    default: null
+    default: null,
   }
 }, { timestamps: true });
 
