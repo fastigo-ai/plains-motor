@@ -1,8 +1,14 @@
+// ===== PROPERTY DETAIL CONTROLLER =====
+
+// controllers/property/propertyDetailController.js
 import propertyCard from '../../modals/properties/propertyModal.js';
 import propertyDetail from '../../modals/properties/propertyDetailModal.js';
 import mongoose from 'mongoose';
 import { uploadToCloudinary } from '../../config/cloudinary.js';
 
+// @desc    Add property detail
+// @route   POST /api/property-details
+// @access  Private
 export const addListing = async (req, res) => {
   try {
     console.log('=== DEBUG INFO ===');
@@ -32,13 +38,12 @@ export const addListing = async (req, res) => {
     if (req.files && req.files.length > 0) {
       console.log('Processing files...');
       
-      // Upload each file to Cloudinary
       const uploadPromises = req.files.map(async (file) => {
         try {
           console.log(`Uploading file: ${file.originalname}`);
           const result = await uploadToCloudinary(file.buffer, {
             public_id: `property_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
-            format: 'jpg' // Convert all images to JPG
+            format: 'jpg'
           });
           console.log(`Upload successful: ${result.secure_url}`);
           return result.secure_url;
@@ -56,8 +61,6 @@ export const addListing = async (req, res) => {
         return res.status(500).json({ error: 'Failed to upload images to Cloudinary' });
       }
     }
-
-    console.log('Final image URLs:', imageUrls);
 
     const detail = new propertyDetail({
       ...detailData,
@@ -81,6 +84,9 @@ export const addListing = async (req, res) => {
   }
 };
 
+// @desc    Get property detail by card ID
+// @route   GET /api/property-details/:id
+// @access  Private
 export const getListingByCardId = async (req, res) => {
   try {
     const { id } = req.params;
@@ -116,6 +122,7 @@ export const getListingByCardId = async (req, res) => {
           price: 1,
           rating: 1,
           badge: 1,
+          inStock: 1,
           createdAt: 1,
           updatedAt: 1,
           location: '$detail.location',
@@ -141,66 +148,104 @@ export const getListingByCardId = async (req, res) => {
   }
 };
 
-// Alternative version with error handling and retry logic
-export const addListingWithRetry = async (req, res) => {
+// @desc    Update property detail
+// @route   PUT /api/property-details/:id
+// @access  Private
+export const updateListing = async (req, res) => {
   try {
-    const { cardId, ...detailData } = req.body;
+    const { id } = req.params;
+    const detailData = req.body;
     
-    if (!cardId) {
-      return res.status(400).json({ error: 'cardId is required in request body.' });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid detail ID' });
     }
-
-    const card = await propertyCard.findById(cardId);
-    if (!card) {
-      return res.status(404).json({ error: `Card with _id "${cardId}" not found.` });
-    }
-
-    const existingDetail = await propertyDetail.findOne({ property: cardId });
-    if (existingDetail) {
-      return res.status(400).json({ error: 'Detail already exists for this card.' });
-    }
-
-    // Upload files with retry logic
-    let imageUrls = [];
     
+    const existingDetail = await propertyDetail.findById(id);
+    if (!existingDetail) {
+      return res.status(404).json({ error: 'Property detail not found' });
+    }
+    
+    let updateData = { ...detailData };
+    
+    // Handle new image uploads
     if (req.files && req.files.length > 0) {
-      const uploadWithRetry = async (file, retries = 3) => {
-        for (let i = 0; i < retries; i++) {
-          try {
-            const result = await uploadToCloudinary(file.buffer, {
-              public_id: `property_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-            });
-            return result.secure_url;
-          } catch (error) {
-            console.error(`Upload attempt ${i + 1} failed for ${file.originalname}:`, error);
-            if (i === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Wait before retry
-          }
+      console.log('Processing new files...');
+      
+      const uploadPromises = req.files.map(async (file) => {
+        try {
+          const result = await uploadToCloudinary(file.buffer, {
+            public_id: `property_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`,
+            format: 'jpg'
+          });
+          return result.secure_url;
+        } catch (error) {
+          console.error(`Upload failed for ${file.originalname}:`, error);
+          throw error;
         }
-      };
+      });
 
-      const uploadPromises = req.files.map(file => uploadWithRetry(file));
-      imageUrls = await Promise.all(uploadPromises);
+      try {
+        const newImageUrls = await Promise.all(uploadPromises);
+        
+        // Combine existing images with new ones (if keepExisting is true)
+        if (detailData.keepExistingImages === 'true') {
+          updateData.images = [...existingDetail.images, ...newImageUrls];
+        } else {
+          updateData.images = newImageUrls;
+        }
+        
+        console.log('New images uploaded successfully:', newImageUrls);
+      } catch (error) {
+        console.error('Error uploading files:', error);
+        return res.status(500).json({ error: 'Failed to upload images to Cloudinary' });
+      }
     }
-
-    const detail = new propertyDetail({
-      ...detailData,
-      property: cardId,
-      images: imageUrls,
-    });
-
-    const savedDetail = await detail.save();
-
-    card.detail = savedDetail._id;
-    await card.save();
-
-    res.status(201).json({
-      message: 'Listing with multiple images added successfully',
-      detail: savedDetail,
-      uploadedImages: imageUrls.length,
+    
+    const updatedDetail = await propertyDetail.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    res.status(200).json({
+      message: 'Property detail updated successfully',
+      detail: updatedDetail
     });
   } catch (error) {
-    console.error('Error in addListingWithRetry:', error);
+    console.error('Error in updateListing:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// @desc    Delete property detail
+// @route   DELETE /api/property-details/:id
+// @access  Private (Admin only)
+export const deleteListing = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid detail ID' });
+    }
+    
+    const detail = await propertyDetail.findById(id);
+    if (!detail) {
+      return res.status(404).json({ error: 'Property detail not found' });
+    }
+    
+    // Remove detail reference from card
+    await propertyCard.findByIdAndUpdate(
+      detail.property,
+      { $unset: { detail: 1 } }
+    );
+    
+    await propertyDetail.findByIdAndDelete(id);
+    
+    res.status(200).json({
+      message: 'Property detail deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error in deleteListing:', error);
     res.status(500).json({ error: error.message });
   }
 };
