@@ -62,8 +62,7 @@ router.post('/add-property-detail',
 );
 
 router.get('/getPropertyDetail/:id', 
-  protect, 
-  authorizeRoles('customer', 'admin'), 
+ 
   getListingByCardId
 );
 
