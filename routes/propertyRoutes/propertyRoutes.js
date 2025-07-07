@@ -24,14 +24,10 @@ router.post('/add-property',
 );
 
 router.get('/get-all-properties', 
-  protect, 
-  authorizeRoles('customer', 'admin'), 
   getAllCards
 );
 
 router.get('/get-property/:id', 
-  protect, 
-  authorizeRoles('customer', 'admin'), 
   getCardById
 );
 
