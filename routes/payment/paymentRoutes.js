@@ -1,18 +1,26 @@
 import express from 'express';
-
-import { confirmPayment, createPaymentIntent, getOrderDetails, handleStripeWebhook } from '../../controllers/payment/paymentControllers.js';
+import {
+  createCheckoutSession,
+  handleStripeWebhook,
+  getBookingDetails,
+  getUserBookings
+} from '../../controllers/payment/paymentControllers.js';
 
 const router = express.Router();
 
-// Payment routes
-router.post('/create-payment-intent', createPaymentIntent);
-router.post('/confirm-payment', confirmPayment);
-router.get('/order/:orderId', getOrderDetails);
+// Middleware for webhook (raw body needed)
+const webhookMiddleware = (req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+};
 
-// Webhook route (must be raw body)
-router.post('/webhook', 
-  express.raw({ type: 'application/json' }), 
-  handleStripeWebhook
-);
+// Routes
+router.post('/create-checkout-session', createCheckoutSession);
+router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+router.get('/booking-details/:sessionId', getBookingDetails);
+router.get('/user-bookings/:userId', getUserBookings);
 
 export default router;

@@ -73,7 +73,7 @@ const orderSchema = new mongoose.Schema({
     },
     stripePaymentIntentId: {
       type: String,
-      required: true
+      default: ''
     },
     stripePaymentStatus: {
       type: String,
