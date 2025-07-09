@@ -73,7 +73,7 @@ const orderSchema = new mongoose.Schema({
     },
     stripePaymentIntentId: {
       type: String,
-      required: true
+      default: ''
     },
     stripePaymentStatus: {
       type: String,
@@ -110,7 +110,6 @@ const orderSchema = new mongoose.Schema({
 });
 
 // Indexes for better performance
-orderSchema.index({ orderId: 1 });
 orderSchema.index({ 'customer.email': 1 });
 orderSchema.index({ 'payment.stripePaymentIntentId': 1 });
 orderSchema.index({ status: 1 });

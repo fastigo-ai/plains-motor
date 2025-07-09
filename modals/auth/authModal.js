@@ -1,15 +1,23 @@
-import mongoose, { Document, Schema } from 'mongoose';
+// ===== UPDATED MODELS =====
 
-const userSchema = new Schema({
-  name: {
+// models/User.js
+import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema({
+  firstname: {
     type: String,
     trim: true,
-    default: 'User'
+    default: 'John'
+  },
+  lastname: {
+    type: String,
+    trim: true,
+    default: 'Doe'
   },
   email: {
     type: String,
     unique: true,
-    sparse: true, // Allows multiple null values
+    sparse: true,
     lowercase: true,
     trim: true
   },
@@ -54,6 +62,9 @@ const userSchema = new Schema({
 });
 
 // Index for automatic OTP cleanup after 5 minutes
-userSchema.index({ otpCreatedAt: 1 }, { expireAfterSeconds: 300, partialFilterExpression: { otp: { $exists: true } } });
+userSchema.index({ otpCreatedAt: 1 }, { 
+  expireAfterSeconds: 300, 
+  partialFilterExpression: { otp: { $exists: true } } 
+});
 
 export const User = mongoose.model('User', userSchema);
