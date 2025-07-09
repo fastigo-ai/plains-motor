@@ -262,6 +262,7 @@ export const createCheckoutSession = async (req, res) => {
 
 // Handle Stripe Webhook
 export const handleStripeWebhook = async (req, res) => {
+  console.log("Running Event")
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -273,6 +274,7 @@ export const handleStripeWebhook = async (req, res) => {
   }
 
   // Handle the event
+  console.log(event.type , "event.type")
   switch (event.type) {
     case 'checkout.session.completed':
       const session = event.data.object;
@@ -296,6 +298,7 @@ export const handleStripeWebhook = async (req, res) => {
 // Handle successful payment
 const handleSuccessfulPayment = async (session) => {
   try {
+    console.log(session.metadata , "session.metadata")
     const { orderId, bookingId } = session.metadata;
 
     // Update booking status

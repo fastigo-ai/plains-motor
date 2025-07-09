@@ -17,8 +17,7 @@ import { protect, authorizeRoles } from '../../utils/authMiddleware.js';
 const router = express.Router();
 
 router.post('/add-property', 
-  protect, 
-  authorizeRoles('customer', 'admin'), 
+
   upload.single('image'), 
   addCard
 );
@@ -43,20 +42,14 @@ router.put('/update-property/:id',
 
 
 router.delete('/delete-property/:id', 
-  protect, 
-  authorizeRoles('admin' , 'customer'), 
   deleteProperty
 );
 
 router.patch('/toggle-stock/:id', 
-  protect, 
-  authorizeRoles('admin'), 
   toggleStock
 );
 
 router.post('/add-property-detail', 
-  protect, 
-  authorizeRoles('customer', 'admin'), 
   upload.any(), 
   addListing
 );

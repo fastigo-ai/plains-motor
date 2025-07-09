@@ -12,6 +12,7 @@ connectDB();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
 app.use(express.json());
 

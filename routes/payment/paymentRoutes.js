@@ -19,7 +19,7 @@ const webhookMiddleware = (req, res, next) => {
 
 // Routes
 router.post('/create-checkout-session', createCheckoutSession);
-router.post('/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+router.post('/webhook', handleStripeWebhook);
 router.get('/booking-details/:sessionId', getBookingDetails);
 router.get('/user-bookings/:userId', getUserBookings);
 

@@ -103,8 +103,5 @@ const paymentSchema = new mongoose.Schema({
 });
 
 // Indexes
-paymentSchema.index({ paymentId: 1 });
-paymentSchema.index({ 'stripe.paymentIntentId': 1 });
-paymentSchema.index({ status: 1 });
 
 export default mongoose.model('Payment', paymentSchema);
