@@ -333,12 +333,38 @@ const handleSuccessfulPayment = async (session) => {
 
 // Handle payment intent succeeded
 const handlePaymentIntentSucceeded = async (paymentIntent) => {
-  try {
-    // Additional logic if needed
-    console.log('Payment intent succeeded:', paymentIntent.id);
-  } catch (error) {
-    console.error('Error handling payment intent succeeded:', error);
-  }
+    try {
+        console.log(session.metadata , "session.metadata")
+        const { orderId, bookingId } = session.metadata;
+    
+        // Update booking status
+        const booking = await Booked.findById(bookingId);
+        if (booking) {
+          booking.bookingStatus = 'confirmed';
+          booking.payment.paymentStatus = 'succeeded';
+          await booking.save();
+        }
+    
+        // Update order status
+        const order = await Order.findById(orderId);
+        if (order) {
+          order.status = 'confirmed';
+          order.payment.stripePaymentStatus = 'succeeded';
+          await order.save();
+        }
+    
+        // Update payment record
+        const payment = await Payment.findOne({ bookingId: bookingId });
+        if (payment) {
+          payment.status = 'succeeded';
+          payment.stripe.status = 'succeeded';
+          await payment.save();
+        }
+    
+        console.log('Payment successful for booking:', bookingId);
+      } catch (error) {
+        console.error('Error handling successful payment:', error);
+      }
 };
 
 // Handle payment failed
