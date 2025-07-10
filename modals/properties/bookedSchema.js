@@ -76,9 +76,5 @@ const bookedSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-// Index for efficient queries
-bookedSchema.index({ userId: 1 });
-bookedSchema.index({ property: 1 });
-bookedSchema.index({ checkInDate: 1, checkOutDate: 1 });
 
 export default mongoose.model('Booked', bookedSchema);

@@ -13,6 +13,8 @@ import {
 } from '../../controllers/property/propertyDetailController.js';
 import upload from '../../utils/multer.js';
 import { protect, authorizeRoles } from '../../utils/authMiddleware.js';
+import  { getDashboardData, getDashboardDataByDateRange } from '../../controllers/property/dashboardController.js';
+import { getMyBookingById, getMyBookings } from '../../controllers/booking/bookingController.js';
 
 const router = express.Router();
 
@@ -58,5 +60,18 @@ router.get('/getPropertyDetail/:id',
  
   getListingByCardId
 );
+
+
+// Main dashboard endpoint
+router.get('/dashboard', getDashboardData);
+
+// Dashboard with custom date range
+router.get('/dashboard/date-range', getDashboardDataByDateRange);
+
+
+
+router.get('/my-bookings', protect, getMyBookings);
+
+router.get('/my-bookings/:bookingId', getMyBookingById);
 
 export default router;

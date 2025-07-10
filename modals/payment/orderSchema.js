@@ -109,9 +109,5 @@ const orderSchema = new mongoose.Schema({
   timestamps: true 
 });
 
-// Indexes for better performance
-orderSchema.index({ 'customer.email': 1 });
-orderSchema.index({ 'payment.stripePaymentIntentId': 1 });
-orderSchema.index({ status: 1 });
 
 export default mongoose.model('Order', orderSchema);

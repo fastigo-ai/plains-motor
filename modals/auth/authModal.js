@@ -24,7 +24,6 @@ const userSchema = new mongoose.Schema({
   mobile: {
     type: String,
     required: true,
-    unique: true,
     trim: true
   },
   otp: {
@@ -61,10 +60,5 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for automatic OTP cleanup after 5 minutes
-userSchema.index({ otpCreatedAt: 1 }, { 
-  expireAfterSeconds: 300, 
-  partialFilterExpression: { otp: { $exists: true } } 
-});
 
 export const User = mongoose.model('User', userSchema);
