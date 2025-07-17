@@ -132,7 +132,7 @@ import Booked from '../../modals/properties/bookedSchema.js';
 export const getMyBookings = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
-    console.log(req.user , "req.userreq.userreq.userssssss");
+   
     
     if (!userId) {
       return res.status(400).json({ success: false, message: "User ID is required" });
@@ -158,7 +158,6 @@ export const getMyBookings = async (req, res) => {
 export const getMyBookingById = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const { userId } = req.user;
 
     // Validate bookingId
     if (!mongoose.Types.ObjectId.isValid(bookingId)) {
