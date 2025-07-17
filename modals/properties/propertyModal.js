@@ -7,7 +7,6 @@ const propertyCardSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    unique: true,
   },
   image: {
     type: String,
@@ -30,6 +29,11 @@ const propertyCardSchema = new mongoose.Schema({
   badge: {
     type: String,
     default: null,
+  },
+  roomType: {
+    type: String,
+    enum: ['single', 'double'],
+    required: true
   },
   // 🔗 Reference to category
   category: {

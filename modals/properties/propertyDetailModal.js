@@ -23,7 +23,49 @@ const propertyDetailSchema = new mongoose.Schema({
   },
   description: String,
   images: [String],
-  price: Number
+  price: Number,
+
+  // Room Details
+  roomType: {
+    type: String,
+    enum: ['single', 'double'],
+    required: true
+  },
+
+  quantity: Number,
+
+  defaultAllowedPersons: Number,     // manually provided e.g., 2 for single, 4 for double
+  allowedPersonsPerRoom: Number,     // can be > defaultAllowedPersons
+  extraPersonCharge: {
+    type: Number,
+    default: 0
+  },
+
+  isSmokingAllowed: {
+    type: Boolean,
+    default: false
+  },
+
+  smokingRoomCharge: {
+    type: Number,
+    default: 0
+  },
+
+  isPetFriendly: {
+    type: Boolean,
+    default: false
+  },
+
+  allowedPets: {
+    type: Number,
+    default: 0
+  },
+
+  petFeePerPet: {
+    type: Number,
+    default: 0
+  }
+
 }, { timestamps: true });
 
 export default mongoose.model('propertyDetail', propertyDetailSchema);

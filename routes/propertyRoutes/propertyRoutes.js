@@ -72,6 +72,6 @@ router.get('/dashboard/date-range', getDashboardDataByDateRange);
 
 router.get('/my-bookings', protect, getMyBookings);
 
-router.get('/my-bookings/:bookingId', getMyBookingById);
+router.get('/my-bookings/:bookingId',  protect, getMyBookingById);
 
 export default router;
