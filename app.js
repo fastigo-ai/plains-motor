@@ -10,7 +10,7 @@ dotenv.config();
 connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(cors());

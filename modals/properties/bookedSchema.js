@@ -112,6 +112,9 @@ const bookedSchema = new mongoose.Schema({
       default: 'pending'
     }
   }
-}, { timestamps: true });
+}, { 
+  timestamps: true 
+});
+
 
 export default mongoose.model('Booked', bookedSchema);

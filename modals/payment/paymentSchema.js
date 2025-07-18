@@ -15,6 +15,13 @@ const paymentSchema = new mongoose.Schema({
     required: true
   },
   
+  // Booking reference
+  bookingId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Booked',
+    required: true
+  },
+  
   // Stripe details
   stripe: {
     paymentIntentId: {
@@ -98,9 +105,10 @@ const paymentSchema = new mongoose.Schema({
     of: String,
     default: {}
   }
-}, { 
-  timestamps: true 
+}, {
+  timestamps: true
 });
+
 
 // Indexes
 

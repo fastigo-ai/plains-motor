@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema({
   // Order identification
@@ -57,6 +57,20 @@ const orderSchema = new mongoose.Schema({
     nights: {
       type: Number,
       required: true
+    },
+    rooms: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    roomType: {
+      type: String,
+      enum: ['single', 'double'],
+      required: true
+    },
+    specialRequest: {
+      type: String,
+      default: ''
     }
   },
   
@@ -93,6 +107,13 @@ const orderSchema = new mongoose.Schema({
     default: 'pending'
   },
   
+  // Booking reference
+  bookingId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Booked',
+    required: true
+  },
+  
   // Additional details
   notes: {
     type: String,
@@ -105,9 +126,8 @@ const orderSchema = new mongoose.Schema({
     of: String,
     default: {}
   }
-}, { 
-  timestamps: true 
+}, {
+  timestamps: true
 });
-
 
 export default mongoose.model('Order', orderSchema);

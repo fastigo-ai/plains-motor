@@ -8,6 +8,7 @@ import Booked from '../../modals/properties/bookedSchema.js';
 import PropertyCard from '../../modals/properties/propertyModal.js';
 
 // Table update helper function
+// Table update helper function
 export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDate, roomType, quantity, action = 'book', session = null) => {
   try {
     // Get property details
@@ -15,7 +16,9 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     if (!property || !property.detail) {
       throw new Error('Property or property details not found');
     }
-
+   console.log(property)
+   console.log(property.detail)
+   console.log(roomType)
     const propertyDetail = property.detail;
     
     // Validate room type matches
@@ -143,7 +146,7 @@ export const createCheckoutSession = async (req, res) => {
       });
     }
 
-    // Validate room availability
+    // Validate room availability FIRST
     const roomAvailability = await updateRoomAvailability(
       propertyId, 
       checkInDate, 
@@ -236,18 +239,45 @@ export const createCheckoutSession = async (req, res) => {
       bookingStatus: { $in: ['pending', 'confirmed', 'completed'] }
     }).session(session);
 
-    // Check for exact same dates by same user (prevent duplicate)
+    // Check for exact same dates by same user
     const duplicateBooking = existingUserBookings.find(booking => {
       return booking.checkInDate.getTime() === checkIn.getTime() && 
              booking.checkOutDate.getTime() === checkOut.getTime();
     });
 
+    // NEW LOGIC: Only prevent duplicate booking if no rooms are available
     if (duplicateBooking) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        success: false,
-        message: 'You already have a booking for this property on the same dates'
-      });
+      // Calculate current room usage for the same dates
+      const sameUserSameDateBookings = await Booked.find({
+        property: propertyId,
+        userId: userId,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+        bookingStatus: { $in: ['pending', 'confirmed', 'completed'] }
+      }).session(session);
+
+      // Calculate total rooms this user has booked for these exact dates
+      const userRoomsForSameDates = sameUserSameDateBookings.reduce((total, booking) => {
+        return total + (booking.roomDetails?.quantity || 1);
+      }, 0);
+
+      // Check if adding more rooms would exceed availability
+      const totalRoomsAfterBooking = userRoomsForSameDates + quantity;
+      const availableRoomsAfterExisting = roomAvailability.availableRooms + userRoomsForSameDates;
+
+      if (totalRoomsAfterBooking > availableRoomsAfterExisting) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: `You already have a booking for this property on the same dates. No additional rooms available for these dates. Available: ${availableRoomsAfterExisting - userRoomsForSameDates}, Requested: ${quantity}`,
+          details: {
+            userCurrentRooms: userRoomsForSameDates,
+            requestedRooms: quantity,
+            availableRooms: availableRoomsAfterExisting - userRoomsForSameDates,
+            totalPropertyRooms: roomAvailability.totalRooms
+          }
+        });
+      }
     }
 
     // Check for consecutive dates (add-on booking)
@@ -262,7 +292,7 @@ export const createCheckoutSession = async (req, res) => {
     let isExtension = false;
     let originalBooking = null;
 
-    if (consecutiveBooking) {
+    if (consecutiveBooking && !duplicateBooking) {
       isExtension = true;
       originalBooking = consecutiveBooking;
     }
@@ -278,7 +308,7 @@ export const createCheckoutSession = async (req, res) => {
     let savedBooking;
     let bookingAction = 'created';
 
-    if (isExtension && originalBooking) {
+    if (isExtension && originalBooking && !duplicateBooking) {
       // Extend existing booking
       const newCheckIn = new Date(Math.min(originalBooking.checkInDate.getTime(), checkIn.getTime()));
       const newCheckOut = new Date(Math.max(originalBooking.checkOutDate.getTime(), checkOut.getTime()));
@@ -322,7 +352,7 @@ export const createCheckoutSession = async (req, res) => {
       bookingAction = 'extended';
       
     } else {
-      // Create new booking
+      // Create new booking (including additional rooms for same dates)
       const booking = new Booked({
         property: propertyId,
         userId,
@@ -352,7 +382,7 @@ export const createCheckoutSession = async (req, res) => {
       });
 
       savedBooking = await booking.save({ session });
-      bookingAction = 'created';
+      bookingAction = duplicateBooking ? 'additional_rooms' : 'created';
     }
 
     // Create order
@@ -380,9 +410,10 @@ export const createCheckoutSession = async (req, res) => {
         stripePaymentStatus: 'pending'
       },
       bookingId: savedBooking._id,
-      notes: isExtension ? `Extension payment for existing booking` : '',
+      notes: isExtension ? `Extension payment for existing booking` : (duplicateBooking ? 'Additional rooms for same dates' : ''),
       metadata: {
         isExtension: isExtension.toString(),
+        isAdditionalRooms: duplicateBooking ? 'true' : 'false',
         originalBookingId: originalBooking?._id?.toString() || '',
         bookingAction: bookingAction
       }
@@ -404,10 +435,12 @@ export const createCheckoutSession = async (req, res) => {
           price_data: {
             currency: currency,
             product_data: {
-              name: `${property.name} ${isExtension ? '(Extension)' : ''}`,
+              name: `${property.name} ${isExtension ? '(Extension)' : duplicateBooking ? '(Additional Rooms)' : ''}`,
               description: isExtension 
                 ? `Extension: ${lineItemDescription}`
-                : lineItemDescription,
+                : duplicateBooking 
+                  ? `Additional Rooms: ${lineItemDescription}`
+                  : lineItemDescription,
               images: property.image ? [property.image] : [],
             },
             unit_amount: Math.floor(totalAmount) * 100,
@@ -425,6 +458,7 @@ export const createCheckoutSession = async (req, res) => {
         userId: userId,
         customOrderId: orderId,
         isExtension: isExtension.toString(),
+        isAdditionalRooms: duplicateBooking ? 'true' : 'false',
         bookingAction: bookingAction,
         roomType: roomType,
         roomQuantity: quantity.toString()
@@ -440,7 +474,7 @@ export const createCheckoutSession = async (req, res) => {
       },
       custom_text: {
         submit: {
-          message: `Complete your ${isExtension ? 'extension' : 'booking'} payment securely.`
+          message: `Complete your ${isExtension ? 'extension' : duplicateBooking ? 'additional room' : 'booking'} payment securely.`
         }
       },
       expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
@@ -453,6 +487,7 @@ export const createCheckoutSession = async (req, res) => {
           userId: userId,
           customOrderId: orderId,
           isExtension: isExtension.toString(),
+          isAdditionalRooms: duplicateBooking ? 'true' : 'false',
           bookingAction: bookingAction,
           roomType: roomType,
           roomQuantity: quantity.toString()
@@ -501,6 +536,7 @@ export const createCheckoutSession = async (req, res) => {
       customOrderId: orderId,
       bookingAction: bookingAction,
       isExtension: isExtension,
+      isAdditionalRooms: duplicateBooking || false,
       roomAvailability: {
         availableRooms: roomAvailability.availableRooms,
         totalRooms: roomAvailability.totalRooms,
@@ -530,7 +566,8 @@ export const createCheckoutSession = async (req, res) => {
     if (error.message.includes('Not enough rooms available') || 
         error.message.includes('Too many guests') ||
         error.message.includes('Pets are not allowed') ||
-        error.message.includes('Too many pets')) {
+        error.message.includes('Too many pets') ||
+        error.message.includes('You already have a booking for this property on the same dates')) {
       return res.status(400).json({
         success: false,
         message: error.message,
@@ -572,133 +609,345 @@ export const createCheckoutSession = async (req, res) => {
   }
 };
 
-
 export const handleStripeWebhook = async (req, res) => {
-  console.log("Running Event")
+  console.log("Running Stripe Webhook Event");
+  
   const sig = req.headers['stripe-signature'];
   let event;
-
+  
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    console.log(`Webhook signature verification failed.`, err.message);
+    console.error(`Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-
-  // Handle the event
-  console.log(event.type , "event.type")
-  switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      await handleSuccessfulPayment(session);
-      break;
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      await handlePaymentIntentSucceeded(paymentIntent);
-      break;
-    case 'payment_intent.payment_failed':
-      const failedPayment = event.data.object;
-      await handlePaymentFailed(failedPayment);
-      break;
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+  
+  console.log(`Processing event type: ${event.type}`);
+  
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed':
+        const session = event.data.object;
+        await handleSuccessfulPayment(session);
+        break;
+        
+      case 'payment_intent.succeeded':
+        const paymentIntent = event.data.object;
+        await handlePaymentIntentSucceeded(paymentIntent);
+        break;
+        
+      case 'payment_intent.payment_failed':
+        const failedPayment = event.data.object;
+        await handlePaymentFailed(failedPayment);
+        break;
+        
+      case 'payment_intent.canceled':
+        const canceledPayment = event.data.object;
+        await handlePaymentCanceled(canceledPayment);
+        break;
+        
+      default:
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
-
-  res.json({received: true});
 };
 
-// Handle successful payment
+// Handle successful checkout session completion
 const handleSuccessfulPayment = async (session) => {
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+  
   try {
-    console.log(session.metadata , "session.metadata")
-    const { orderId, bookingId } = session.metadata;
-
+    console.log('Processing successful payment for session:', session.id);
+    console.log('Session metadata:', session.metadata);
+    
+    const { orderId, bookingId, propertyId, isExtension, isAdditionalRooms, bookingAction } = session.metadata;
+    
+    if (!orderId || !bookingId) {
+      throw new Error('Missing required metadata in session');
+    }
+    
     // Update booking status
-    const booking = await Booked.findById(bookingId);
-    if (booking) {
-      booking.bookingStatus = 'confirmed';
-      booking.payment.paymentStatus = 'succeeded';
-      await booking.save();
+    const booking = await Booked.findById(bookingId).session(mongoSession);
+    if (!booking) {
+      throw new Error(`Booking not found: ${bookingId}`);
     }
-
+    
+    booking.bookingStatus = 'confirmed';
+    booking.payment.paymentStatus = 'succeeded';
+    booking.payment.paymentIntentId = session.payment_intent;
+    await booking.save({ session: mongoSession });
+    
     // Update order status
-    const order = await Order.findById(orderId);
-    if (order) {
-      order.status = 'confirmed';
-      order.payment.stripePaymentStatus = 'succeeded';
-      await order.save();
+    const order = await Order.findById(orderId).session(mongoSession);
+    if (!order) {
+      throw new Error(`Order not found: ${orderId}`);
     }
-
+    
+    order.status = 'confirmed';
+    order.payment.stripePaymentStatus = 'succeeded';
+    order.payment.stripePaymentIntentId = session.payment_intent;
+    await order.save({ session: mongoSession });
+    
     // Update payment record
-    const payment = await Payment.findOne({ bookingId: bookingId });
+    const payment = await Payment.findOne({ bookingId: bookingId }).session(mongoSession);
     if (payment) {
       payment.status = 'succeeded';
       payment.stripe.status = 'succeeded';
-      await payment.save();
+      
+      // Add payment method details if available
+      if (session.payment_method_types && session.payment_method_types.length > 0) {
+        payment.paymentMethod.type = session.payment_method_types[0];
+      }
+      
+      await payment.save({ session: mongoSession });
     }
-
-    console.log('Payment successful for booking:', bookingId);
+    
+    // Update room availability if needed
+    if (propertyId) {
+      await updateRoomAvailability(
+        propertyId,
+        booking.checkInDate,
+        booking.checkOutDate,
+        booking.roomDetails.roomType,
+        booking.roomDetails.quantity,
+        'confirm',
+        mongoSession
+      );
+    }
+    
+    await mongoSession.commitTransaction();
+    
+    console.log(`Payment successful for booking: ${bookingId}, action: ${bookingAction}`);
+    
+    // Send confirmation email or notification here if needed
+    
   } catch (error) {
+    await mongoSession.abortTransaction();
     console.error('Error handling successful payment:', error);
+    throw error;
+  } finally {
+    mongoSession.endSession();
   }
 };
 
-// Handle payment intent succeeded
+// Handle payment intent succeeded (backup handler)
 const handlePaymentIntentSucceeded = async (paymentIntent) => {
-    try {
-        console.log(session.metadata , "session.metadata")
-        const { orderId, bookingId } = session.metadata;
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+  
+  try {
+    console.log('Processing payment intent succeeded:', paymentIntent.id);
+    console.log('Payment intent metadata:', paymentIntent.metadata);
     
-        // Update booking status
-        const booking = await Booked.findById(bookingId);
-        if (booking) {
-          booking.bookingStatus = 'confirmed';
-          booking.payment.paymentStatus = 'succeeded';
-          await booking.save();
+    const { orderId, bookingId, propertyId, bookingAction } = paymentIntent.metadata;
+    
+    if (!orderId || !bookingId) {
+      console.log('Missing metadata in payment intent, skipping...');
+      return;
+    }
+    
+    // Check if already processed by checkout.session.completed
+    const existingBooking = await Booked.findById(bookingId).session(mongoSession);
+    if (existingBooking && existingBooking.bookingStatus === 'confirmed') {
+      console.log('Payment already processed by checkout.session.completed');
+      await mongoSession.commitTransaction();
+      return;
+    }
+    
+    // Update booking status
+    if (existingBooking) {
+      existingBooking.bookingStatus = 'confirmed';
+      existingBooking.payment.paymentStatus = 'succeeded';
+      existingBooking.payment.paymentIntentId = paymentIntent.id;
+      await existingBooking.save({ session: mongoSession });
+    }
+    
+    // Update order status
+    const order = await Order.findById(orderId).session(mongoSession);
+    if (order) {
+      order.status = 'confirmed';
+      order.payment.stripePaymentStatus = 'succeeded';
+      order.payment.stripePaymentIntentId = paymentIntent.id;
+      await order.save({ session: mongoSession });
+    }
+    
+    // Update payment record
+    const payment = await Payment.findOne({ bookingId: bookingId }).session(mongoSession);
+    if (payment) {
+      payment.status = 'succeeded';
+      payment.stripe.status = 'succeeded';
+      
+      // Add charge details if available
+      if (paymentIntent.charges && paymentIntent.charges.data.length > 0) {
+        const charge = paymentIntent.charges.data[0];
+        payment.stripe.charges = [{
+          chargeId: charge.id,
+          amount: charge.amount,
+          status: charge.status,
+          receiptUrl: charge.receipt_url,
+          created: new Date(charge.created * 1000)
+        }];
+        
+        // Add payment method details
+        if (charge.payment_method_details && charge.payment_method_details.card) {
+          const card = charge.payment_method_details.card;
+          payment.paymentMethod = {
+            type: 'card',
+            last4: card.last4,
+            brand: card.brand,
+            expMonth: card.exp_month,
+            expYear: card.exp_year
+          };
         }
-    
-        // Update order status
-        const order = await Order.findById(orderId);
-        if (order) {
-          order.status = 'confirmed';
-          order.payment.stripePaymentStatus = 'succeeded';
-          await order.save();
-        }
-    
-        // Update payment record
-        const payment = await Payment.findOne({ bookingId: bookingId });
-        if (payment) {
-          payment.status = 'succeeded';
-          payment.stripe.status = 'succeeded';
-          await payment.save();
-        }
-    
-        console.log('Payment successful for booking:', bookingId);
-      } catch (error) {
-        console.error('Error handling successful payment:', error);
       }
+      
+      await payment.save({ session: mongoSession });
+    }
+    
+    await mongoSession.commitTransaction();
+    
+    console.log(`Payment intent succeeded for booking: ${bookingId}, action: ${bookingAction}`);
+    
+  } catch (error) {
+    await mongoSession.abortTransaction();
+    console.error('Error handling payment intent succeeded:', error);
+    throw error;
+  } finally {
+    mongoSession.endSession();
+  }
 };
 
 // Handle payment failed
 const handlePaymentFailed = async (failedPayment) => {
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+  
   try {
-    // Find and update booking/order status
-    const booking = await Booked.findOne({
-      'payment.paymentIntentId': failedPayment.id
-    });
-
+    console.log('Processing payment failed:', failedPayment.id);
+    console.log('Failed payment metadata:', failedPayment.metadata);
+    
+    const { orderId, bookingId, propertyId } = failedPayment.metadata;
+    
+    // Update booking status
+    const booking = await Booked.findById(bookingId).session(mongoSession);
     if (booking) {
       booking.bookingStatus = 'cancelled';
       booking.payment.paymentStatus = 'failed';
-      await booking.save();
+      booking.payment.paymentIntentId = failedPayment.id;
+      await booking.save({ session: mongoSession });
     }
-
-    console.log('Payment failed for:', failedPayment.id);
+    
+    // Update order status
+    const order = await Order.findById(orderId).session(mongoSession);
+    if (order) {
+      order.status = 'cancelled';
+      order.payment.stripePaymentStatus = 'failed';
+      order.payment.stripePaymentIntentId = failedPayment.id;
+      await order.save({ session: mongoSession });
+    }
+    
+    // Update payment record
+    const payment = await Payment.findOne({ bookingId: bookingId }).session(mongoSession);
+    if (payment) {
+      payment.status = 'failed';
+      payment.stripe.status = 'failed';
+      await payment.save({ session: mongoSession });
+    }
+    
+    // Release room availability
+    if (propertyId && booking) {
+      await updateRoomAvailability(
+        propertyId,
+        booking.checkInDate,
+        booking.checkOutDate,
+        booking.roomDetails.roomType,
+        booking.roomDetails.quantity,
+        'cancel',
+        mongoSession
+      );
+    }
+    
+    await mongoSession.commitTransaction();
+    
+    console.log(`Payment failed for booking: ${bookingId}`);
+    
   } catch (error) {
+    await mongoSession.abortTransaction();
     console.error('Error handling payment failed:', error);
+    throw error;
+  } finally {
+    mongoSession.endSession();
   }
 };
 
+// Handle payment canceled
+const handlePaymentCanceled = async (canceledPayment) => {
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+  
+  try {
+    console.log('Processing payment canceled:', canceledPayment.id);
+    console.log('Canceled payment metadata:', canceledPayment.metadata);
+    
+    const { orderId, bookingId, propertyId } = canceledPayment.metadata;
+    
+    // Update booking status
+    const booking = await Booked.findById(bookingId).session(mongoSession);
+    if (booking) {
+      booking.bookingStatus = 'cancelled';
+      booking.payment.paymentStatus = 'failed';
+      booking.payment.paymentIntentId = canceledPayment.id;
+      await booking.save({ session: mongoSession });
+    }
+    
+    // Update order status
+    const order = await Order.findById(orderId).session(mongoSession);
+    if (order) {
+      order.status = 'cancelled';
+      order.payment.stripePaymentStatus = 'canceled';
+      order.payment.stripePaymentIntentId = canceledPayment.id;
+      await order.save({ session: mongoSession });
+    }
+    
+    // Update payment record
+    const payment = await Payment.findOne({ bookingId: bookingId }).session(mongoSession);
+    if (payment) {
+      payment.status = 'failed';
+      payment.stripe.status = 'cancelled';
+      await payment.save({ session: mongoSession });
+    }
+    
+    // Release room availability
+    if (propertyId && booking) {
+      await updateRoomAvailability(
+        propertyId,
+        booking.checkInDate,
+        booking.checkOutDate,
+        booking.roomDetails.roomType,
+        booking.roomDetails.quantity,
+        'cancel',
+        mongoSession
+      );
+    }
+    
+    await mongoSession.commitTransaction();
+    
+    console.log(`Payment canceled for booking: ${bookingId}`);
+    
+  } catch (error) {
+    await mongoSession.abortTransaction();
+    console.error('Error handling payment canceled:', error);
+    throw error;
+  } finally {
+    mongoSession.endSession();
+  }
+};
 // Get booking details after successful payment
 export const getBookingDetails = async (req, res) => {
   try {
