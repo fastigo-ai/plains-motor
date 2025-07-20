@@ -16,11 +16,13 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     if (!property || !property.detail) {
       throw new Error('Property or property details not found');
     }
+    
    console.log(property)
    console.log(property.detail)
    console.log(roomType)
     const propertyDetail = property.detail;
     
+    console.log(propertyDetail.roomType , "roomType")
     // Validate room type matches
     if (propertyDetail.roomType !== roomType) {
       throw new Error(`Room type mismatch. Property has ${propertyDetail.roomType} rooms, requested ${roomType}`);
