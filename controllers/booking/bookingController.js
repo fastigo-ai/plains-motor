@@ -136,12 +136,16 @@ export const getMyBookings = async (req, res) => {
       return res.status(400).json({ success: false, message: "User ID is required" });
     }
 
-    const bookings = await Booked.find({ userId })
+    // Filter out bookings with status "pending"
+    const bookings = await Booked.find({ 
+      userId,
+      bookingStatus: { $ne: "pending" } // $ne means "not equal"
+    })
       .populate("property")
       .sort({ createdAt: -1 });
 
     if (!bookings.length) {
-      return res.status(404).json({ success: false, message: "No bookings found" });
+      return res.status(200).json({ success: false, message: "No bookings found" });
     }
 
     res.status(200).json({ success: true, bookings });
