@@ -40,7 +40,7 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     // Check for booking conflicts in the date range
     const conflictingBookings = await Booked.find({
       property: propertyId,
-      bookingStatus: { $in: ['pending', 'confirmed', 'completed'] },
+      bookingStatus: { $in: ['confirmed', 'completed'] },
       $or: [
         {
           checkInDate: { $lt: checkOut },
@@ -451,7 +451,7 @@ export const createCheckoutSession = async (req, res) => {
         },
       ],
       mode: 'payment',
-      success_url: `${baseUrl}/booking-success?session_id={CHECKOUT_SESSION_ID}&action=${bookingAction}&booking_id=${savedBooking._id}&order_id=${savedOrder._id}`,
+      success_url: `${baseUrl}/payment-success`,
       cancel_url: `${baseUrl}`,
       metadata: {
         orderId: savedOrder._id.toString(),

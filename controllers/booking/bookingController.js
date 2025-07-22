@@ -147,6 +147,7 @@ export const getMyBookings = async (req, res) => {
     if (!bookings.length) {
       return res.status(200).json({ success: false, message: "No bookings found" });
     }
+    console.log(bookings)
 
     res.status(200).json({ success: true, bookings });
   } catch (err) {
