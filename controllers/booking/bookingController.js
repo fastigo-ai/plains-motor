@@ -238,3 +238,48 @@ export const getMyUpcomingBookings = async (req, res) => {
     });
   }
 };
+
+// Get all bookings with confirmed status (without pagination)
+export const getAllConfirmedBookings = async (req, res) => {
+  try {
+    const { sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    
+    // Build sort object
+    const sortOptions = {};
+    sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Find all confirmed bookings
+    const confirmedBookings = await Booked.find({
+      bookingStatus: "confirmed"
+    })
+    .populate('property', 'title location images price amenities rating reviews')
+    .populate('userId', 'firstname lastname email mobile')
+    .sort(sortOptions)
+    .lean();
+    
+    if (!confirmedBookings.length) {
+      return res.status(200).json({
+        success: false,
+        message: "No confirmed bookings found"
+      });
+    }
+    
+    console.log(`Found ${confirmedBookings.length} confirmed bookings`);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        bookings: confirmedBookings,
+        count: confirmedBookings.length
+      }
+    });
+    
+  } catch (error) {
+    console.error("❌ Error fetching confirmed bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};

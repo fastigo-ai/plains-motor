@@ -14,7 +14,7 @@ import {
 import upload from '../../utils/multer.js';
 import { protect, authorizeRoles } from '../../utils/authMiddleware.js';
 import  { getDashboardData, getDashboardDataByDateRange } from '../../controllers/property/dashboardController.js';
-import { getMyBookingById, getMyBookings } from '../../controllers/booking/bookingController.js';
+import { getMyBookingById, getMyBookings, getAllConfirmedBookings } from '../../controllers/booking/bookingController.js';
 
 const router = express.Router();
 
@@ -73,5 +73,7 @@ router.get('/dashboard/date-range', getDashboardDataByDateRange);
 router.get('/my-bookings', protect, getMyBookings);
 
 router.get('/my-bookings/:bookingId',  protect, getMyBookingById);
+
+router.get('/all-confirmed-bookings', getAllConfirmedBookings);
 
 export default router;

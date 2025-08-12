@@ -2,7 +2,7 @@
 import Payment from '../../modals/payment/paymentSchema.js';
 import Order from '../../modals/payment/orderSchema.js';
 import { User } from '../../modals/auth/authModal.js';
-
+import Booked from '../../modals/properties/bookedSchema.js';
 
 export const getDashboardData = async (req, res) => {
   try {
@@ -25,62 +25,73 @@ export const getDashboardData = async (req, res) => {
     const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
     const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
 
-    // Parallel execution of all queries
+    // Parallel execution of all queries using the correct Booked model
     const [
-      totalOrdersResult,
-      todayOrdersResult,
+      totalBookingsResult,
+      todayBookingsResult,
+      yesterdayBookingsResult,
       totalRevenueResult,
       newCustomersResult,
-      weeklyBounceRateResult,
-      topCouponsResult,
-      weeklyCouponsResult,
+      weeklyBookingsResult,
+      weeklyCancelledResult,
       salesReportResult,
-      earningsReportResult
+      earningsReportResult,
+      paymentStatusResult
     ] = await Promise.all([
-      // Total Orders
-      Order.countDocuments({ status: { $in: ['confirmed', 'completed'] } }),
+      // Total Confirmed Bookings
+      Booked.countDocuments({ bookingStatus: { $in: ['confirmed', 'completed'] } }),
       
-      // Today's Orders for percentage calculation
-      Order.countDocuments({ 
-        status: { $in: ['confirmed', 'completed'] },
+      // Today's Bookings
+      Booked.countDocuments({ 
+        bookingStatus: { $in: ['confirmed', 'completed'] },
         createdAt: { $gte: today }
       }),
       
-      // Total Revenue
-      Payment.aggregate([
-        { $match: { status: 'succeeded' } },
-        { $group: { _id: null, total: { $sum: '$netAmount' } } }
+      // Yesterday's Bookings for percentage calculation
+      Booked.countDocuments({
+        bookingStatus: { $in: ['confirmed', 'completed'] },
+        createdAt: { $gte: yesterday, $lt: today }
+      }),
+      
+      // Total Revenue from confirmed bookings with succeeded payments
+      Booked.aggregate([
+        { 
+          $match: { 
+            bookingStatus: 'confirmed',
+            'payment.paymentStatus': 'succeeded'
+          } 
+        },
+        { 
+          $group: { 
+            _id: null, 
+            total: { $sum: '$totalAmount' } 
+          } 
+        }
       ]),
       
-      // New Customers
+      // New Customers this week
       User.countDocuments({ 
         role: 'customer',
         createdAt: { $gte: thisWeekStart }
       }),
       
-      // Weekly Bounce Rate (using cancelled orders as proxy)
-      Promise.all([
-        Order.countDocuments({ 
-          createdAt: { $gte: thisWeekStart },
-          status: 'cancelled'
-        }),
-        Order.countDocuments({ 
-          createdAt: { $gte: thisWeekStart }
-        })
-      ]),
+      // Weekly Bookings for bounce rate calculation
+      Booked.countDocuments({ 
+        createdAt: { $gte: thisWeekStart }
+      }),
       
-      // Top Coupons (mock data as no coupon schema provided)
-      // Replace with actual coupon aggregation if you have coupon system
-      Promise.resolve(78), // Mock percentage
-      
-      // Weekly Coupons Sessions
-      Promise.resolve(1.5), // Mock percentage
+      // Weekly Cancelled Bookings (for bounce rate)
+      Booked.countDocuments({ 
+        createdAt: { $gte: thisWeekStart },
+        bookingStatus: 'cancelled'
+      }),
       
       // Sales Report - Monthly comparison
-      Payment.aggregate([
+      Booked.aggregate([
         {
           $match: {
-            status: 'succeeded',
+            bookingStatus: 'confirmed',
+            'payment.paymentStatus': 'succeeded',
             createdAt: { $gte: lastYearStart }
           }
         },
@@ -90,7 +101,7 @@ export const getDashboardData = async (req, res) => {
               year: { $year: '$createdAt' },
               month: { $month: '$createdAt' }
             },
-            total: { $sum: '$netAmount' },
+            total: { $sum: '$totalAmount' },
             count: { $sum: 1 }
           }
         },
@@ -100,23 +111,21 @@ export const getDashboardData = async (req, res) => {
       ]),
       
       // Earnings Report - Daily data for current month
-      Payment.aggregate([
+      Booked.aggregate([
         {
           $match: {
-            status: 'succeeded',
+            bookingStatus: 'confirmed',
+            'payment.paymentStatus': 'succeeded',
             createdAt: { $gte: thisMonthStart }
           }
         },
         {
           $lookup: {
-            from: 'orders',
-            localField: 'order',
+            from: 'propertycards', // Assuming your property collection name
+            localField: 'property',
             foreignField: '_id',
-            as: 'orderDetails'
+            as: 'propertyDetails'
           }
-        },
-        {
-          $unwind: '$orderDetails'
         },
         {
           $group: {
@@ -125,39 +134,57 @@ export const getDashboardData = async (req, res) => {
               month: { $month: '$createdAt' },
               year: { $year: '$createdAt' }
             },
-            earnings: { $sum: '$netAmount' },
-            itemCount: { $sum: 1 },
-            tax: { $sum: '$transactionFee' }
+            earnings: { $sum: '$totalAmount' },
+            bookingCount: { $sum: 1 },
+            totalStayNights: { $sum: '$totalStay' }
           }
         },
         {
           $sort: { '_id.day': 1 }
         },
         {
-          $limit: 10 // Limit to first 10 days as shown in your image
+          $limit: 10 // Limit to first 10 days
+        }
+      ]),
+      
+      // Payment Status Breakdown
+      Booked.aggregate([
+        {
+          $group: {
+            _id: '$payment.paymentStatus',
+            count: { $sum: 1 }
+          }
         }
       ])
     ]);
 
     // Calculate percentages and format data
-    const yesterdayOrders = await Order.countDocuments({
-      status: { $in: ['confirmed', 'completed'] },
-      createdAt: { $gte: yesterday, $lt: today }
+    const newBookingsPercentage = yesterdayBookingsResult > 0 
+      ? ((todayBookingsResult - yesterdayBookingsResult) / yesterdayBookingsResult * 100).toFixed(1)
+      : todayBookingsResult > 0 ? 100 : 0;
+
+    // Calculate bounce rate (cancelled bookings / total bookings * 100)
+    const bounceRate = weeklyBookingsResult > 0 
+      ? (weeklyCancelledResult / weeklyBookingsResult * 100).toFixed(1)
+      : 0;
+
+    // Get current month bookings for comparison
+    const currentMonthBookings = await Booked.countDocuments({
+      bookingStatus: 'confirmed',
+      createdAt: { $gte: thisMonthStart }
     });
 
-    const newSessionsPercentage = yesterdayOrders > 0 
-      ? ((todayOrdersResult - yesterdayOrders) / yesterdayOrders * 100).toFixed(1)
-      : 0;
+    const lastMonthBookings = await Booked.countDocuments({
+      bookingStatus: 'confirmed',
+      createdAt: { $gte: lastMonthStart, $lt: thisMonthStart }
+    });
 
-    // Calculate bounce rate
-    const [cancelledOrders, totalWeeklyOrders] = weeklyBounceRateResult;
-    const bounceRate = totalWeeklyOrders > 0 
-      ? (cancelledOrders / totalWeeklyOrders * 100).toFixed(1)
-      : 0;
+    const monthlyGrowth = lastMonthBookings > 0 
+      ? ((currentMonthBookings - lastMonthBookings) / lastMonthBookings * 100).toFixed(1)
+      : currentMonthBookings > 0 ? 100 : 0;
 
     // Process sales report data
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
     
     const thisYearData = salesReportResult.filter(item => item._id.year === currentYear);
     const lastYearData = salesReportResult.filter(item => item._id.year === currentYear - 1);
@@ -165,84 +192,173 @@ export const getDashboardData = async (req, res) => {
     const salesChartData = {
       thisYear: thisYearData.reduce((sum, item) => sum + item.total, 0),
       lastYear: lastYearData.reduce((sum, item) => sum + item.total, 0),
-      monthlyData: thisYearData.map(item => ({
-        month: item._id.month,
-        revenue: item.total,
-        orders: item.count
-      }))
+      monthlyData: Array.from({length: 12}, (_, i) => {
+        const monthData = thisYearData.find(item => item._id.month === i + 1);
+        return {
+          month: i + 1,
+          revenue: monthData ? monthData.total : 0,
+          bookings: monthData ? monthData.count : 0,
+          monthName: new Date(currentYear, i).toLocaleDateString('en-US', { month: 'short' })
+        };
+      })
     };
 
     // Format earnings report
     const earningsData = earningsReportResult.map(item => ({
-      date: `${String(item._id.day).padStart(2, '0')} ${new Date(2024, item._id.month - 1).toLocaleDateString('en-US', { month: 'long' })}`,
-      itemCount: item.itemCount,
-      tax: `$${item.tax.toFixed(0)}`,
-      earnings: `$${item.earnings.toLocaleString()}`
+      date: `${String(item._id.day).padStart(2, '0')} ${new Date(currentYear, item._id.month - 1).toLocaleDateString('en-US', { month: 'long' })}`,
+      bookingCount: item.bookingCount,
+      totalNights: item.totalStayNights,
+      earnings: `$${item.earnings.toLocaleString()}`,
+      rawEarnings: item.earnings
     }));
 
     // Calculate total earnings for the badge
     const totalEarnings = earningsReportResult.reduce((sum, item) => sum + item.earnings, 0);
+    const avgDailyEarnings = earningsReportResult.length > 0 ? totalEarnings / earningsReportResult.length : 0;
+
+    // Get top performing properties
+    const topPropertiesResult = await Booked.aggregate([
+      {
+        $match: {
+          bookingStatus: 'confirmed',
+          'payment.paymentStatus': 'succeeded',
+          property: { $ne: null }
+        }
+      },
+      {
+        $lookup: {
+          from: 'propertycards',
+          localField: 'property',
+          foreignField: '_id',
+          as: 'propertyDetails'
+        }
+      },
+      {
+        $unwind: '$propertyDetails'
+      },
+      {
+        $group: {
+          _id: '$property',
+          propertyTitle: { $first: '$propertyDetails.title' },
+          totalRevenue: { $sum: '$totalAmount' },
+          bookingCount: { $sum: 1 },
+          avgRating: { $first: '$propertyDetails.rating' }
+        }
+      },
+      {
+        $sort: { totalRevenue: -1 }
+      },
+      {
+        $limit: 5
+      }
+    ]);
+
+    // Recent bookings for activity feed
+    const recentBookings = await Booked.find({
+      bookingStatus: 'confirmed'
+    })
+    .populate('userId', 'firstname lastname')
+    .populate('property', 'title')
+    .sort({ createdAt: -1 })
+    .limit(5)
+    .lean();
 
     // Response data
     const dashboardData = {
       // Main KPIs
-      totalOrders: {
-        count: totalOrdersResult,
-        percentage: `${newSessionsPercentage}%`,
-        label: 'New Sessions Today'
+      totalBookings: {
+        count: totalBookingsResult,
+        percentage: `${newBookingsPercentage}%`,
+        label: 'vs Yesterday',
+        trend: newBookingsPercentage > 0 ? 'up' : newBookingsPercentage < 0 ? 'down' : 'stable'
       },
       
       newCustomers: {
         count: newCustomersResult,
         percentage: `${bounceRate}%`,
-        label: 'Bounce Rate Weekly'
-      },
-      
-      topCoupons: {
-        percentage: `${topCouponsResult}%`,
-        weeklyAvg: `${weeklyCouponsResult}%`,
-        label: 'Weekly Avg Sessions'
+        label: 'Cancellation Rate',
+        monthlyGrowth: `${monthlyGrowth}%`
       },
       
       totalRevenue: {
         amount: totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0,
-        formatted: `$${totalRevenueResult.length > 0 ? totalRevenueResult[0].total.toLocaleString() : '0'}`
+        formatted: `$${totalRevenueResult.length > 0 ? totalRevenueResult[0].total.toLocaleString() : '0'}`,
+        avgPerBooking: totalBookingsResult > 0 
+          ? `$${((totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0) / totalBookingsResult).toFixed(2)}`
+          : '$0'
       },
+      
+      // Payment Status Breakdown
+      paymentBreakdown: paymentStatusResult.reduce((acc, item) => {
+        acc[item._id || 'unknown'] = item.count;
+        return acc;
+      }, {}),
       
       // Sales Report
       salesReport: {
-        period: 'This Month',
+        period: `${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
         chartData: salesChartData,
         comparison: {
           thisYear: salesChartData.thisYear,
           lastYear: salesChartData.lastYear,
           growth: salesChartData.lastYear > 0 
             ? ((salesChartData.thisYear - salesChartData.lastYear) / salesChartData.lastYear * 100).toFixed(1)
-            : 0
-        }
+            : salesChartData.thisYear > 0 ? 100 : 0
+        },
+        monthlyData: salesChartData.monthlyData
       },
       
       // Earnings Report
       earningsReport: {
         totalEarnings: `$${totalEarnings.toLocaleString()}`,
+        avgDailyEarnings: `$${avgDailyEarnings.toFixed(2)}`,
         data: earningsData
       },
       
-      // Device breakdown (mock data based on your image)
-      deviceBreakdown: {
-        tablet: 'Tablet',
-        desktop: 'Desktop', 
-        mobile: 'Mobile'
+      // Top Properties
+      topProperties: topPropertiesResult.map(prop => ({
+        id: prop._id,
+        name: prop.propertyTitle,
+        revenue: `$${prop.totalRevenue.toLocaleString()}`,
+        bookings: prop.bookingCount,
+        rating: prop.avgRating || 'N/A'
+      })),
+      
+      // Recent Activity
+      recentActivity: recentBookings.map(booking => ({
+        id: booking._id,
+        customerName: booking.userId ? 
+          `${booking.userId.firstname} ${booking.userId.lastname}` : 'Guest',
+        propertyName: booking.property?.title || 'Property not available',
+        amount: `$${booking.totalAmount}`,
+        date: booking.createdAt.toLocaleDateString(),
+        status: booking.bookingStatus
+      })),
+      
+      // Statistics Summary
+      summary: {
+        totalBookings: totalBookingsResult,
+        totalRevenue: totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0,
+        totalCustomers: newCustomersResult,
+        avgBookingValue: totalBookingsResult > 0 
+          ? ((totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0) / totalBookingsResult).toFixed(2)
+          : 0,
+        occupancyRate: `${(100 - parseFloat(bounceRate)).toFixed(1)}%`, // Inverse of cancellation rate
+        topPerformingMonth: salesChartData.monthlyData
+          .reduce((max, month) => month.revenue > max.revenue ? month : max, {revenue: 0, monthName: 'N/A'})
+          .monthName
       },
       
       // Meta information
-      dateRange: '01 January 2023 to 31 December 2024',
-      lastUpdated: now.toISOString()
+      dateRange: `01 January ${currentYear} to ${now.toLocaleDateString()}`,
+      lastUpdated: now.toISOString(),
+      dataSource: 'Booked Collection'
     };
 
     res.status(200).json({
       success: true,
-      data: dashboardData
+      data: dashboardData,
+      timestamp: now.toISOString()
     });
 
   } catch (error) {
