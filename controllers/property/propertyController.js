@@ -112,11 +112,19 @@ export const updateProperty = async (req, res) => {
       extraPersonCharge, isSmokingAllowed, smokingRoomCharge, isPetFriendly,
       allowedPets, petFeePerPet,
       
-      // Control flags
+      // Control flags - Fixed to handle string values from form data
       updateCard = true,
       updateListing = true,
       keepExistingImages = false
     } = req.body;
+
+    console.log(req.body, "Tbalew");
+
+    // Parse boolean values from strings (common with form data)
+    const parsedUpdateCard = typeof updateCard === 'string' ? updateCard === 'true' : Boolean(updateCard);
+    const parsedUpdateListing = typeof updateListing === 'string' ? updateListing === 'true' : Boolean(updateListing);
+    const parsedKeepExistingImages = typeof keepExistingImages === 'string' ? keepExistingImages === 'true' : Boolean(keepExistingImages);
+    const parsedInStock = typeof inStock === 'string' ? inStock === 'true' : Boolean(inStock);
 
     // Input validation
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -134,7 +142,7 @@ export const updateProperty = async (req, res) => {
     };
     
     for (const [field, value] of Object.entries(numericFields)) {
-      if (value !== undefined && value !== null && (isNaN(value) || value < 0)) {
+      if (value !== undefined && value !== null && value !== '' && (isNaN(value) || Number(value) < 0)) {
         return res.status(400).json({
           success: false,
           error: `Invalid ${field}: must be a non-negative number`
@@ -143,14 +151,14 @@ export const updateProperty = async (req, res) => {
     }
 
     // Validate rating ranges
-    if (rating !== undefined && (rating < 0 || rating > 5)) {
+    if (rating !== undefined && rating !== '' && (Number(rating) < 0 || Number(rating) > 5)) {
       return res.status(400).json({
         success: false,
         error: 'Rating must be between 0 and 5'
       });
     }
 
-    if (listingRating !== undefined && (listingRating < 0 || listingRating > 5)) {
+    if (listingRating !== undefined && listingRating !== '' && (Number(listingRating) < 0 || Number(listingRating) > 5)) {
       return res.status(400).json({
         success: false,
         error: 'Listing rating must be between 0 and 5'
@@ -179,16 +187,16 @@ export const updateProperty = async (req, res) => {
     let updatedListing = null;
 
     // ===== Update Card =====
-    if (updateCard) {
+    if (parsedUpdateCard) {
       const cardUpdateData = {};
 
       // Update basic card fields
       if (name?.trim()) cardUpdateData.name = name.trim();
       if (title?.trim()) cardUpdateData.title = title.trim();
-      if (price !== undefined) cardUpdateData.price = Number(price);
-      if (rating !== undefined) cardUpdateData.rating = Number(rating);
+      if (price !== undefined && price !== '') cardUpdateData.price = Number(price);
+      if (rating !== undefined && rating !== '') cardUpdateData.rating = Number(rating);
       if (badge?.trim()) cardUpdateData.badge = badge.trim();
-      if (inStock !== undefined) cardUpdateData.inStock = Boolean(inStock);
+      if (inStock !== undefined) cardUpdateData.inStock = parsedInStock;
       if (roomType) cardUpdateData.roomType = roomType;
 
       // Handle category
@@ -243,7 +251,16 @@ export const updateProperty = async (req, res) => {
     }
 
     // ===== Update Listing =====
-    if (updateListing) {
+    // Check if we need to update listing fields (even if updateListing is false, we might have listing-related data)
+    const hasListingData = location || guest || bedroom || bed || bathroom || description || 
+                           listingRating !== undefined || detailPrice !== undefined || quantity !== undefined ||
+                           defaultAllowedPersons !== undefined || allowedPersonsPerRoom !== undefined ||
+                           extraPersonCharge !== undefined || isSmokingAllowed !== undefined ||
+                           smokingRoomCharge !== undefined || isPetFriendly !== undefined ||
+                           allowedPets !== undefined || petFeePerPet !== undefined ||
+                           req.files?.listingImages?.length > 0;
+
+    if (parsedUpdateListing || hasListingData) {
       let listing = await propertyDetail.findOne({ property: id }).session(session);
 
       if (listing) {
@@ -251,29 +268,42 @@ export const updateProperty = async (req, res) => {
 
         // Update basic listing fields
         if (location?.trim()) listingUpdateData.location = location.trim();
-        if (guest !== undefined) listingUpdateData.guest = Number(guest);
-        if (bedroom !== undefined) listingUpdateData.bedroom = Number(bedroom);
-        if (bed !== undefined) listingUpdateData.bed = Number(bed);
-        if (bathroom !== undefined) listingUpdateData.bathroom = Number(bathroom);
+        if (guest !== undefined && guest !== '') listingUpdateData.guest = Number(guest);
+        if (bedroom !== undefined && bedroom !== '') listingUpdateData.bedroom = Number(bedroom);
+        if (bed !== undefined && bed !== '') listingUpdateData.bed = Number(bed);
+        if (bathroom !== undefined && bathroom !== '') listingUpdateData.bathroom = Number(bathroom);
         if (description?.trim()) listingUpdateData.description = description.trim();
-        if (listingRating !== undefined) listingUpdateData.rating = Number(listingRating);
+        if (listingRating !== undefined && listingRating !== '') listingUpdateData.rating = listingRating; // Keep as string per schema
 
         // Handle price field in detail (separate from card price)
-        if (detailPrice !== undefined) listingUpdateData.price = Number(detailPrice);
+        if (detailPrice !== undefined && detailPrice !== '') listingUpdateData.price = Number(detailPrice);
 
         // Handle room type in detail
         if (roomType) listingUpdateData.roomType = roomType;
 
+        console.log(listingUpdateData , "listingUpdateData")
+        
         // Handle new room detail fields
-        if (quantity !== undefined) listingUpdateData.quantity = Number(quantity);
-        if (defaultAllowedPersons !== undefined) listingUpdateData.defaultAllowedPersons = Number(defaultAllowedPersons);
-        if (allowedPersonsPerRoom !== undefined) listingUpdateData.allowedPersonsPerRoom = Number(allowedPersonsPerRoom);
-        if (extraPersonCharge !== undefined) listingUpdateData.extraPersonCharge = Number(extraPersonCharge);
-        if (isSmokingAllowed !== undefined) listingUpdateData.isSmokingAllowed = Boolean(isSmokingAllowed);
-        if (smokingRoomCharge !== undefined) listingUpdateData.smokingRoomCharge = Number(smokingRoomCharge);
-        if (isPetFriendly !== undefined) listingUpdateData.isPetFriendly = Boolean(isPetFriendly);
-        if (allowedPets !== undefined) listingUpdateData.allowedPets = Number(allowedPets);
-        if (petFeePerPet !== undefined) listingUpdateData.petFeePerPet = Number(petFeePerPet);
+        if (quantity !== undefined && quantity !== '') listingUpdateData.quantity = Number(quantity);
+        if (defaultAllowedPersons !== undefined && defaultAllowedPersons !== '') listingUpdateData.defaultAllowedPersons = Number(defaultAllowedPersons);
+        if (allowedPersonsPerRoom !== undefined && allowedPersonsPerRoom !== '') listingUpdateData.allowedPersonsPerRoom = Number(allowedPersonsPerRoom);
+        if (extraPersonCharge !== undefined && extraPersonCharge !== '') listingUpdateData.extraPersonCharge = Number(extraPersonCharge);
+        
+        // Parse boolean fields
+        if (isSmokingAllowed !== undefined) {
+          const parsedIsSmokingAllowed = typeof isSmokingAllowed === 'string' ? isSmokingAllowed === 'true' : Boolean(isSmokingAllowed);
+          listingUpdateData.isSmokingAllowed = parsedIsSmokingAllowed;
+        }
+        
+        if (smokingRoomCharge !== undefined && smokingRoomCharge !== '') listingUpdateData.smokingRoomCharge = Number(smokingRoomCharge);
+        
+        if (isPetFriendly !== undefined) {
+          const parsedIsPetFriendly = typeof isPetFriendly === 'string' ? isPetFriendly === 'true' : Boolean(isPetFriendly);
+          listingUpdateData.isPetFriendly = parsedIsPetFriendly;
+        }
+        
+        if (allowedPets !== undefined && allowedPets !== '') listingUpdateData.allowedPets = Number(allowedPets);
+        if (petFeePerPet !== undefined && petFeePerPet !== '') listingUpdateData.petFeePerPet = Number(petFeePerPet);
 
         // Handle listing images
         const listingImageFiles = req.files?.listingImages || [];
@@ -293,7 +323,7 @@ export const updateProperty = async (req, res) => {
 
             const newImageUrls = await Promise.all(uploadPromises);
 
-            if (keepExistingImages && listing.images?.length > 0) {
+            if (parsedKeepExistingImages && listing.images?.length > 0) {
               listingUpdateData.images = [...listing.images, ...newImageUrls];
             } else {
               listingUpdateData.images = newImageUrls;
@@ -320,30 +350,42 @@ export const updateProperty = async (req, res) => {
               session 
             }
           );
+        } else {
+          // If no updates, still return the existing listing
+          updatedListing = listing;
         }
-      } else {
-        // Create new listing if it doesn't exist
+      } else if (parsedUpdateListing) {
+        // Create new listing only if updateListing is explicitly true
         const newListingData = {
           property: id,
           ...(location?.trim() && { location: location.trim() }),
-          ...(guest !== undefined && { guest: Number(guest) }),
-          ...(bedroom !== undefined && { bedroom: Number(bedroom) }),
-          ...(bed !== undefined && { bed: Number(bed) }),
-          ...(bathroom !== undefined && { bathroom: Number(bathroom) }),
+          ...(guest !== undefined && guest !== '' && { guest: Number(guest) }),
+          ...(bedroom !== undefined && bedroom !== '' && { bedroom: Number(bedroom) }),
+          ...(bed !== undefined && bed !== '' && { bed: Number(bed) }),
+          ...(bathroom !== undefined && bathroom !== '' && { bathroom: Number(bathroom) }),
           ...(description?.trim() && { description: description.trim() }),
-          ...(listingRating !== undefined && { rating: Number(listingRating) }),
-          ...(detailPrice !== undefined && { price: Number(detailPrice) }),
+          ...(listingRating !== undefined && listingRating !== '' && { rating: listingRating }), // Keep as string
+          ...(detailPrice !== undefined && detailPrice !== '' && { price: Number(detailPrice) }),
           ...(roomType && { roomType: roomType }),
-          ...(quantity !== undefined && { quantity: Number(quantity) }),
-          ...(defaultAllowedPersons !== undefined && { defaultAllowedPersons: Number(defaultAllowedPersons) }),
-          ...(allowedPersonsPerRoom !== undefined && { allowedPersonsPerRoom: Number(allowedPersonsPerRoom) }),
-          ...(extraPersonCharge !== undefined && { extraPersonCharge: Number(extraPersonCharge) }),
-          ...(isSmokingAllowed !== undefined && { isSmokingAllowed: Boolean(isSmokingAllowed) }),
-          ...(smokingRoomCharge !== undefined && { smokingRoomCharge: Number(smokingRoomCharge) }),
-          ...(isPetFriendly !== undefined && { isPetFriendly: Boolean(isPetFriendly) }),
-          ...(allowedPets !== undefined && { allowedPets: Number(allowedPets) }),
-          ...(petFeePerPet !== undefined && { petFeePerPet: Number(petFeePerPet) })
+          ...(quantity !== undefined && quantity !== '' && { quantity: Number(quantity) }),
+          ...(defaultAllowedPersons !== undefined && defaultAllowedPersons !== '' && { defaultAllowedPersons: Number(defaultAllowedPersons) }),
+          ...(allowedPersonsPerRoom !== undefined && allowedPersonsPerRoom !== '' && { allowedPersonsPerRoom: Number(allowedPersonsPerRoom) }),
+          ...(extraPersonCharge !== undefined && extraPersonCharge !== '' && { extraPersonCharge: Number(extraPersonCharge) }),
+          ...(smokingRoomCharge !== undefined && smokingRoomCharge !== '' && { smokingRoomCharge: Number(smokingRoomCharge) }),
+          ...(allowedPets !== undefined && allowedPets !== '' && { allowedPets: Number(allowedPets) }),
+          ...(petFeePerPet !== undefined && petFeePerPet !== '' && { petFeePerPet: Number(petFeePerPet) })
         };
+
+        // Handle boolean fields for new listing
+        if (isSmokingAllowed !== undefined) {
+          const parsedIsSmokingAllowed = typeof isSmokingAllowed === 'string' ? isSmokingAllowed === 'true' : Boolean(isSmokingAllowed);
+          newListingData.isSmokingAllowed = parsedIsSmokingAllowed;
+        }
+
+        if (isPetFriendly !== undefined) {
+          const parsedIsPetFriendly = typeof isPetFriendly === 'string' ? isPetFriendly === 'true' : Boolean(isPetFriendly);
+          newListingData.isPetFriendly = parsedIsPetFriendly;
+        }
 
         // Validate required fields for new listing
         if (!newListingData.location) {
@@ -400,6 +442,24 @@ export const updateProperty = async (req, res) => {
       }
     }
 
+    // Handle case where only inStock needs to be updated and no other updates were made
+    if (!parsedUpdateCard && !parsedUpdateListing && !hasListingData && inStock !== undefined) {
+      updatedCard = await propertyCard.findByIdAndUpdate(
+        id,
+        { inStock: parsedInStock, updatedAt: new Date() },
+        { 
+          new: true, 
+          runValidators: true,
+          session 
+        }
+      ).populate('category');
+    }
+
+    // If we still don't have listing data but the listing exists, fetch it
+    if (!updatedListing) {
+      updatedListing = await propertyDetail.findOne({ property: id }).session(session);
+    }
+
     // Commit transaction
     await session.commitTransaction();
 
@@ -447,7 +507,6 @@ export const updateProperty = async (req, res) => {
     session.endSession();
   }
 };
-
 /**
  * Helper function to handle category updates
  * @param {string|ObjectId} category - Category name or ID

@@ -16,10 +16,9 @@ const propertyDetailSchema = new mongoose.Schema({
   bed: Number,
   bathroom: Number,
   rating: {
-    type: Number,
-    min: 1,
-    max: 5,
-    default: 0,
+    type: String,
+    
+    default: '',
   },
   description: String,
   images: [String],
