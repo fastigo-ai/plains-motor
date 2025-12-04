@@ -17,12 +17,12 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     if (!property || !property.detail) {
 //       throw new Error('Property or property details not found');
 //     }
-    
+
 //    console.log(property)
 //    console.log(property.detail)
 //    console.log(roomType)
 //     const propertyDetail = property.detail;
-    
+
 //     console.log(propertyDetail.roomType , "roomType")
 //     // Validate room type matches
 //     if (propertyDetail.roomType !== roomType) {
@@ -37,7 +37,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     // Calculate date range for checking conflicts
 //     const checkIn = new Date(checkInDate);
 //     const checkOut = new Date(checkOutDate);
-    
+
 //     // Check for booking conflicts in the date range
 //     const conflictingBookings = await Booked.find({
 //       property: propertyId,
@@ -57,14 +57,14 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //     // Check availability
 //     const availableRooms = propertyDetail.quantity - roomsBookedInPeriod;
-    
+
 //     if (action === 'book' && availableRooms < quantity) {
 //       throw new Error(`Not enough rooms available for selected dates. Available: ${availableRooms}, Requested: ${quantity}`);
 //     }
 
 //     // Update property stock status based on availability
 //     const shouldBeInStock = availableRooms > 0;
-    
+
 //     if (property.inStock !== shouldBeInStock) {
 //       await PropertyCard.findByIdAndUpdate(
 //         propertyId,
@@ -132,7 +132,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     const property = await PropertyCard.findById(propertyId)
 //       .populate('detail')
 //       .session(session);
-    
+
 //     if (!property) {
 //       await session.abortTransaction();
 //       return res.status(404).json({
@@ -209,7 +209,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     // Validate guest capacity
 //     const totalGuests = guests.adults + (guests.children || 0) + (guests.infants || 0);
 //     const maxCapacity = (allowedPersonsPerRoom * quantity) + extraPersons;
-    
+
 //     if (totalGuests > maxCapacity) {
 //       await session.abortTransaction();
 //       return res.status(400).json({
@@ -287,7 +287,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     const consecutiveBooking = existingUserBookings.find(booking => {
 //       const existingCheckOut = new Date(booking.checkOutDate);
 //       const existingCheckIn = new Date(booking.checkInDate);
-      
+
 //       return existingCheckOut.getTime() === checkIn.getTime() ||
 //              checkOut.getTime() === existingCheckIn.getTime();
 //     });
@@ -304,7 +304,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     const timestamp = Date.now();
 //     const randomSuffix = Math.random().toString(36).substr(2, 9);
 //     const userSuffix = userId.toString().substr(-4);
-    
+
 //     const orderId = `ORDER-${timestamp}-${userSuffix}-${randomSuffix}`;
 //     const paymentId = `PAY-${timestamp}-${userSuffix}-${randomSuffix}`;
 
@@ -322,12 +322,12 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //       originalBooking.checkOutDate = newCheckOut;
 //       originalBooking.totalStay = newTotalStay;
 //       originalBooking.totalAmount = originalBooking.totalAmount + totalAmount;
-      
+
 //       // Update room details if extending with different room configuration
 //       if (quantity > originalBooking.roomDetails.quantity) {
 //         originalBooking.roomDetails.quantity = quantity;
 //       }
-      
+
 //       // Update guests if new booking has more guests
 //       if (guests.adults > originalBooking.guests.adults) {
 //         originalBooking.guests.adults = guests.adults;
@@ -338,7 +338,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //       if (guests.infants > originalBooking.guests.infants) {
 //         originalBooking.guests.infants = guests.infants;
 //       }
-      
+
 //       // Update pet details
 //       if (pets > originalBooking.roomDetails.pets) {
 //         originalBooking.roomDetails.pets = pets;
@@ -353,7 +353,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //       savedBooking = await originalBooking.save({ session });
 //       bookingAction = 'extended';
-      
+
 //     } else {
 //       // Create new booking (including additional rooms for same dates)
 //       const booking = new Booked({
@@ -521,7 +521,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //       paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
 //       paymentStatus: 'pending'
 //     };
-    
+
 //     await savedBooking.save({ session });
 
 //     savedOrder.payment.stripePaymentIntentId = checkoutSession.payment_intent || checkoutSession.id;
@@ -564,7 +564,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //   } catch (error) {
 //     await session.abortTransaction();
 //     console.error('Checkout session creation error:', error);
-    
+
 //     // Handle specific errors
 //     if (error.message.includes('Not enough rooms available') || 
 //         error.message.includes('Too many guests') ||
@@ -577,14 +577,14 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //         redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
 //       });
 //     }
-    
+
 //     if (error.code === 11000) {
 //       console.error('Duplicate key error details:', {
 //         keyPattern: error.keyPattern,
 //         keyValue: error.keyValue,
 //         message: error.message
 //       });
-      
+
 //       return res.status(400).json({
 //         success: false,
 //         message: 'Booking conflict detected. Please try again.',
@@ -614,25 +614,25 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 // export const handleStripeWebhook = async (req, res) => {
 //   console.log("Running Stripe Webhook Event");
-  
+
 //   const sig = req.headers['stripe-signature'];
 //   let event;
-  
+
 //   try {
 //     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
 //   } catch (err) {
 //     console.error(`Webhook signature verification failed:`, err.message);
 //     return res.status(400).send(`Webhook Error: ${err.message}`);
 //   }
-  
+
 //   console.log(`Processing event type: ${event.type}`);
 
-  
+
 //   try {
 //     switch (event.type) {
 //       case 'checkout.session.completed':
 //         const session = event.data.object;
-        
+
 //         await handleSuccessfulPayment(session);
 //         await sendEmail({
 //           to: session.customer_details.email,
@@ -641,7 +641,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //           html: '<p>Your booking has been confirmed.</p>'
 //         });
 //         break;
-        
+
 //       case 'payment_intent.succeeded':
 //         const paymentIntent = event.data.object;
 //         await handlePaymentIntentSucceeded(paymentIntent);
@@ -652,7 +652,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //           html: '<p>Your booking has been confirmed.</p>'
 //         });
 //         break;
-        
+
 //       case 'payment_intent.payment_failed':
 //         const failedPayment = event.data.object;  
 //         await handlePaymentFailed(failedPayment);
@@ -663,7 +663,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //           html: '<p>Your booking has been failed.</p>'
 //         });
 //         break;
-        
+
 //       case 'payment_intent.canceled':
 //         const canceledPayment = event.data.object;
 //         await handlePaymentCanceled(canceledPayment);
@@ -674,11 +674,11 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //           html: '<p>Your booking has been canceled.</p>'
 //         });
 //         break;
-        
+
 //       default:
 //         console.log(`Unhandled event type: ${event.type}`);
 //     }
-    
+
 //     res.json({ received: true });
 //   } catch (error) {
 //     console.error('Error processing webhook:', error);
@@ -690,29 +690,29 @@ import { sendEmail } from '../../utils/sendEmail.js';
 const handleSuccessfulPayment = async (session) => {
   return await retryWithBackoff(async () => {
     const mongoSession = await mongoose.startSession();
-    
+
     try {
       await mongoSession.withTransaction(async () => {
         console.log('Processing successful payment for session:', session.id);
         console.log('Session metadata:', session.metadata);
-        
+
         const { orderId, bookingId, propertyId, isExtension, isAdditionalRooms, bookingAction } = session.metadata;
-        
+
         if (!orderId || !bookingId) {
           throw new Error('Missing required metadata in session');
         }
-        
+
         // Check if booking is already confirmed to prevent duplicate processing
         const existingBooking = await Booked.findById(bookingId).session(mongoSession);
         if (!existingBooking) {
           throw new Error(`Booking not found: ${bookingId}`);
         }
-        
+
         if (existingBooking.bookingStatus === 'confirmed' && existingBooking.payment?.paymentIntentId === session.payment_intent) {
           console.log(`Payment already processed for booking: ${bookingId}`);
           return; // Skip processing if already confirmed with same payment intent
         }
-        
+
         // Use findOneAndUpdate for atomic updates to prevent write conflicts
         const updatedBooking = await Booked.findByIdAndUpdate(
           bookingId,
@@ -724,17 +724,17 @@ const handleSuccessfulPayment = async (session) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
-            session: mongoSession, 
+          {
+            session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         if (!updatedBooking) {
           throw new Error(`Failed to update booking: ${bookingId}`);
         }
-        
+
         // Update order status atomically
         const updatedOrder = await Order.findByIdAndUpdate(
           orderId,
@@ -746,17 +746,17 @@ const handleSuccessfulPayment = async (session) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
-            session: mongoSession, 
+          {
+            session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         if (!updatedOrder) {
           throw new Error(`Failed to update order: ${orderId}`);
         }
-        
+
         // Update payment record atomically
         const paymentUpdate = {
           $set: {
@@ -765,22 +765,22 @@ const handleSuccessfulPayment = async (session) => {
             updatedAt: new Date()
           }
         };
-        
+
         // Add payment method details if available
         if (session.payment_method_types && session.payment_method_types.length > 0) {
           paymentUpdate.$set['paymentMethod.type'] = session.payment_method_types[0];
         }
-        
+
         await Payment.findOneAndUpdate(
           { bookingId: bookingId },
           paymentUpdate,
-          { 
+          {
             session: mongoSession,
             new: true,
             upsert: false
           }
         );
-        
+
         // Update room availability if needed
         if (propertyId) {
           await updateRoomAvailability(
@@ -798,7 +798,7 @@ const handleSuccessfulPayment = async (session) => {
         readConcern: { level: 'majority' },
         writeConcern: { w: 'majority', j: true }
       });
-      
+
       // Send emails after successful transaction (outside of transaction to avoid delays)
       try {
         await sendBookingEmails('confirmed', session.metadata.bookingId, session);
@@ -807,7 +807,7 @@ const handleSuccessfulPayment = async (session) => {
         console.error('Error sending booking emails:', emailError);
         // Don't throw here as the payment was successful
       }
-      
+
     } finally {
       await mongoSession.endSession();
     }
@@ -818,31 +818,31 @@ const handleSuccessfulPayment = async (session) => {
 const handlePaymentIntentSucceeded = async (paymentIntent) => {
   return await retryWithBackoff(async () => {
     const mongoSession = await mongoose.startSession();
-    
+
     try {
       await mongoSession.withTransaction(async () => {
         console.log('Processing payment intent succeeded:', paymentIntent.id);
         console.log('Payment intent metadata:', paymentIntent.metadata);
-        
+
         const { orderId, bookingId, propertyId, bookingAction } = paymentIntent.metadata;
-        
+
         if (!orderId || !bookingId) {
           console.log('Missing metadata in payment intent, skipping...');
           return;
         }
-        
+
         // Check if already processed by checkout.session.completed
         const existingBooking = await Booked.findById(bookingId).session(mongoSession);
         if (!existingBooking) {
           console.log(`Booking not found: ${bookingId}`);
           return;
         }
-        
+
         if (existingBooking.bookingStatus === 'confirmed') {
           console.log('Payment already processed by checkout.session.completed or previous payment_intent.succeeded');
           return;
         }
-        
+
         // Use atomic updates to prevent write conflicts
         const updatedBooking = await Booked.findByIdAndUpdate(
           bookingId,
@@ -854,17 +854,17 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
-            session: mongoSession, 
+          {
+            session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         if (!updatedBooking) {
           throw new Error(`Failed to update booking: ${bookingId}`);
         }
-        
+
         // Update order status atomically
         await Order.findByIdAndUpdate(
           orderId,
@@ -876,13 +876,13 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
+          {
             session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         // Update payment record atomically
         const paymentUpdate = {
           $set: {
@@ -891,7 +891,7 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
             updatedAt: new Date()
           }
         };
-        
+
         // Add charge details if available
         if (paymentIntent.charges && paymentIntent.charges.data.length > 0) {
           const charge = paymentIntent.charges.data[0];
@@ -902,7 +902,7 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
             receiptUrl: charge.receipt_url,
             created: new Date(charge.created * 1000)
           }];
-          
+
           // Add payment method details
           if (charge.payment_method_details && charge.payment_method_details.card) {
             const card = charge.payment_method_details.card;
@@ -915,11 +915,11 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
             };
           }
         }
-        
+
         await Payment.findOneAndUpdate(
           { bookingId: bookingId },
           paymentUpdate,
-          { 
+          {
             session: mongoSession,
             new: true,
             upsert: false
@@ -930,7 +930,7 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
         readConcern: { level: 'majority' },
         writeConcern: { w: 'majority', j: true }
       });
-      
+
       // Send emails after successful transaction
       try {
         await sendBookingEmails('confirmed', paymentIntent.metadata.bookingId, paymentIntent);
@@ -939,7 +939,7 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
         console.error('Error sending booking emails:', emailError);
         // Don't throw here as the payment was successful
       }
-      
+
     } finally {
       await mongoSession.endSession();
     }
@@ -950,19 +950,19 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
 const handlePaymentFailed = async (failedPayment) => {
   return await retryWithBackoff(async () => {
     const mongoSession = await mongoose.startSession();
-    
+
     try {
       await mongoSession.withTransaction(async () => {
         console.log('Processing payment failed:', failedPayment.id);
         console.log('Failed payment metadata:', failedPayment.metadata);
-        
+
         const { orderId, bookingId, propertyId } = failedPayment.metadata;
-        
+
         if (!orderId || !bookingId) {
           console.log('Missing metadata in failed payment, skipping...');
           return;
         }
-        
+
         // Update booking status atomically
         const updatedBooking = await Booked.findByIdAndUpdate(
           bookingId,
@@ -974,13 +974,13 @@ const handlePaymentFailed = async (failedPayment) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
-            session: mongoSession, 
+          {
+            session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         // Update order status atomically
         if (updatedBooking) {
           await Order.findByIdAndUpdate(
@@ -993,14 +993,14 @@ const handlePaymentFailed = async (failedPayment) => {
                 'payment.updatedAt': new Date()
               }
             },
-            { 
+            {
               session: mongoSession,
               new: true,
               runValidators: true
             }
           );
         }
-        
+
         // Update payment record atomically
         await Payment.findOneAndUpdate(
           { bookingId: bookingId },
@@ -1011,13 +1011,13 @@ const handlePaymentFailed = async (failedPayment) => {
               updatedAt: new Date()
             }
           },
-          { 
+          {
             session: mongoSession,
             new: true,
             upsert: false
           }
         );
-        
+
         // Release room availability
         if (propertyId && updatedBooking) {
           await updateRoomAvailability(
@@ -1035,7 +1035,7 @@ const handlePaymentFailed = async (failedPayment) => {
         readConcern: { level: 'majority' },
         writeConcern: { w: 'majority', j: true }
       });
-      
+
       // Send emails after successful transaction
       try {
         await sendBookingEmails('failed', failedPayment.metadata.bookingId, failedPayment);
@@ -1043,7 +1043,7 @@ const handlePaymentFailed = async (failedPayment) => {
       } catch (emailError) {
         console.error('Error sending booking emails:', emailError);
       }
-      
+
     } finally {
       await mongoSession.endSession();
     }
@@ -1054,19 +1054,19 @@ const handlePaymentFailed = async (failedPayment) => {
 const handlePaymentCanceled = async (canceledPayment) => {
   return await retryWithBackoff(async () => {
     const mongoSession = await mongoose.startSession();
-    
+
     try {
       await mongoSession.withTransaction(async () => {
         console.log('Processing payment canceled:', canceledPayment.id);
         console.log('Canceled payment metadata:', canceledPayment.metadata);
-        
+
         const { orderId, bookingId, propertyId } = canceledPayment.metadata;
-        
+
         if (!orderId || !bookingId) {
           console.log('Missing metadata in canceled payment, skipping...');
           return;
         }
-        
+
         // Update booking status atomically
         const updatedBooking = await Booked.findByIdAndUpdate(
           bookingId,
@@ -1078,13 +1078,13 @@ const handlePaymentCanceled = async (canceledPayment) => {
               'payment.updatedAt': new Date()
             }
           },
-          { 
-            session: mongoSession, 
+          {
+            session: mongoSession,
             new: true,
             runValidators: true
           }
         );
-        
+
         // Update order status atomically
         if (updatedBooking) {
           await Order.findByIdAndUpdate(
@@ -1097,14 +1097,14 @@ const handlePaymentCanceled = async (canceledPayment) => {
                 'payment.updatedAt': new Date()
               }
             },
-            { 
+            {
               session: mongoSession,
               new: true,
               runValidators: true
             }
           );
         }
-        
+
         // Update payment record atomically
         await Payment.findOneAndUpdate(
           { bookingId: bookingId },
@@ -1115,13 +1115,13 @@ const handlePaymentCanceled = async (canceledPayment) => {
               updatedAt: new Date()
             }
           },
-          { 
+          {
             session: mongoSession,
             new: true,
             upsert: false
           }
         );
-        
+
         // Release room availability
         if (propertyId && updatedBooking) {
           await updateRoomAvailability(
@@ -1139,7 +1139,7 @@ const handlePaymentCanceled = async (canceledPayment) => {
         readConcern: { level: 'majority' },
         writeConcern: { w: 'majority', j: true }
       });
-      
+
       // Send emails after successful transaction
       try {
         await sendBookingEmails('canceled', canceledPayment.metadata.bookingId, canceledPayment);
@@ -1147,7 +1147,7 @@ const handlePaymentCanceled = async (canceledPayment) => {
       } catch (emailError) {
         console.error('Error sending booking emails:', emailError);
       }
-      
+
     } finally {
       await mongoSession.endSession();
     }
@@ -1160,7 +1160,7 @@ export const getBookingDetails = async (req, res) => {
 
     // Retrieve the session from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    
+
     if (!session) {
       return res.status(404).json({
         success: false,
@@ -1172,8 +1172,8 @@ export const getBookingDetails = async (req, res) => {
     const booking = await Booked.findOne({
       'payment.paymentIntentId': sessionId
     })
-    .populate('property', 'name title price image')
-    .populate('userId', 'firstname lastname email mobile');
+      .populate('property', 'name title price image')
+      .populate('userId', 'firstname lastname email mobile');
 
     if (!booking) {
       return res.status(404).json({
@@ -1241,13 +1241,13 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     if (!property || !property.detail) {
       throw new Error('Property or property details not found');
     }
-    
-   console.log(property)
-   console.log(property.detail)
-   console.log(roomType)
+
+    console.log(property)
+    console.log(property.detail)
+    console.log(roomType)
     const propertyDetail = property.detail;
-    
-    console.log(propertyDetail.roomType , "roomType")
+
+    console.log(propertyDetail.roomType, "roomType")
     // Validate room type matches
     if (propertyDetail.roomType !== roomType) {
       throw new Error(`Room type mismatch. Property has ${propertyDetail.roomType} rooms, requested ${roomType}`);
@@ -1261,7 +1261,7 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     // Calculate date range for checking conflicts
     const checkIn = new Date(checkInDate);
     const checkOut = new Date(checkOutDate);
-    
+
     // Check for booking conflicts in the date range
     const conflictingBookings = await Booked.find({
       property: propertyId,
@@ -1281,14 +1281,14 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
 
     // Check availability
     const availableRooms = propertyDetail.quantity - roomsBookedInPeriod;
-    
+
     if (action === 'book' && availableRooms < quantity) {
       throw new Error(`Not enough rooms available for selected dates. Available: ${availableRooms}, Requested: ${quantity}`);
     }
 
     // Update property stock status based on availability
     const shouldBeInStock = availableRooms > 0;
-    
+
     if (property.inStock !== shouldBeInStock) {
       await PropertyCard.findByIdAndUpdate(
         propertyId,
@@ -1297,7 +1297,7 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
       );
     }
 
-    console.log(shouldBeInStock , "adads")
+    console.log(shouldBeInStock, "adads")
 
     return {
       success: true,
@@ -1339,10 +1339,10 @@ export const createCheckoutSession = async (req, res) => {
       },
       guests,
       specialRequest = '',
-      user: { 
-        firstname, 
-        lastname, 
-        phone, 
+      user: {
+        firstname,
+        lastname,
+        phone,
         email  // Accept email in the request
       },
       totalAmount,
@@ -1350,8 +1350,8 @@ export const createCheckoutSession = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!propertyId || !userId || !checkInDate || !checkOutDate || !totalStay || 
-        !roomType || !quantity || !allowedPersonsPerRoom || !guests || !totalAmount) {
+    if (!propertyId || !userId || !checkInDate || !checkOutDate || !totalStay ||
+      !roomType || !quantity || !allowedPersonsPerRoom || !guests || !totalAmount) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
@@ -1363,7 +1363,7 @@ export const createCheckoutSession = async (req, res) => {
     const property = await PropertyCard.findById(propertyId)
       .populate('detail')
       .session(session);
-    
+
     if (!property) {
       await session.abortTransaction();
       return res.status(404).json({
@@ -1382,16 +1382,16 @@ export const createCheckoutSession = async (req, res) => {
 
     // Validate room availability FIRST
     const roomAvailability = await updateRoomAvailability(
-      propertyId, 
-      checkInDate, 
-      checkOutDate, 
-      roomType, 
-      quantity, 
-      'book', 
+      propertyId,
+      checkInDate,
+      checkOutDate,
+      roomType,
+      quantity,
+      'book',
       session
     );
 
-    console.log(roomAvailability , "roomAvailability")
+    console.log(roomAvailability, "roomAvailability")
 
     // Validate user exists
     const existingUser = await User.findById(userId).session(session);
@@ -1416,7 +1416,7 @@ export const createCheckoutSession = async (req, res) => {
         updateData,
         { session, runValidators: true }
       );
-      
+
       // Update existingUser object with new data for use in response
       Object.assign(existingUser, updateData);
     }
@@ -1446,7 +1446,7 @@ export const createCheckoutSession = async (req, res) => {
     // Validate guest capacity
     const totalGuests = guests.adults + (guests.children || 0) + (guests.infants || 0);
     const maxCapacity = (allowedPersonsPerRoom * quantity) + extraPersons;
-    
+
     if (totalGuests > maxCapacity) {
       await session.abortTransaction();
       return res.status(400).json({
@@ -1481,8 +1481,8 @@ export const createCheckoutSession = async (req, res) => {
 
     // Check for exact same dates by same user
     const duplicateBooking = existingUserBookings.find(booking => {
-      return booking.checkInDate.getTime() === checkIn.getTime() && 
-             booking.checkOutDate.getTime() === checkOut.getTime();
+      return booking.checkInDate.getTime() === checkIn.getTime() &&
+        booking.checkOutDate.getTime() === checkOut.getTime();
     });
 
     // NEW LOGIC: Only prevent duplicate booking if no rooms are available
@@ -1524,9 +1524,9 @@ export const createCheckoutSession = async (req, res) => {
     const consecutiveBooking = existingUserBookings.find(booking => {
       const existingCheckOut = new Date(booking.checkOutDate);
       const existingCheckIn = new Date(booking.checkInDate);
-      
+
       return existingCheckOut.getTime() === checkIn.getTime() ||
-             checkOut.getTime() === existingCheckIn.getTime();
+        checkOut.getTime() === existingCheckIn.getTime();
     });
 
     let isExtension = false;
@@ -1541,7 +1541,7 @@ export const createCheckoutSession = async (req, res) => {
     const timestamp = Date.now();
     const randomSuffix = Math.random().toString(36).substr(2, 9);
     const userSuffix = userId.toString().substr(-4);
-    
+
     const orderId = `ORDER-${timestamp}-${userSuffix}-${randomSuffix}`;
     const paymentId = `PAY-${timestamp}-${userSuffix}-${randomSuffix}`;
 
@@ -1559,12 +1559,12 @@ export const createCheckoutSession = async (req, res) => {
       originalBooking.checkOutDate = newCheckOut;
       originalBooking.totalStay = newTotalStay;
       originalBooking.totalAmount = originalBooking.totalAmount + totalAmount;
-      
+
       // Update room details if extending with different room configuration
       if (quantity > originalBooking.roomDetails.quantity) {
         originalBooking.roomDetails.quantity = quantity;
       }
-      
+
       // Update guests if new booking has more guests
       if (guests.adults > originalBooking.guests.adults) {
         originalBooking.guests.adults = guests.adults;
@@ -1575,7 +1575,7 @@ export const createCheckoutSession = async (req, res) => {
       if (guests.infants > originalBooking.guests.infants) {
         originalBooking.guests.infants = guests.infants;
       }
-      
+
       // Update pet details
       if (pets > originalBooking.roomDetails.pets) {
         originalBooking.roomDetails.pets = pets;
@@ -1583,14 +1583,14 @@ export const createCheckoutSession = async (req, res) => {
 
       // Append special request if provided
       if (specialRequest) {
-        originalBooking.specialRequest = originalBooking.specialRequest 
+        originalBooking.specialRequest = originalBooking.specialRequest
           ? `${originalBooking.specialRequest}; ${specialRequest}`
           : specialRequest;
       }
 
       savedBooking = await originalBooking.save({ session });
       bookingAction = 'extended';
-      
+
     } else {
       // Create new booking (including additional rooms for same dates)
       const booking = new Booked({
@@ -1676,9 +1676,9 @@ export const createCheckoutSession = async (req, res) => {
             currency: currency,
             product_data: {
               name: `${property.name} ${isExtension ? '(Extension)' : duplicateBooking ? '(Additional Rooms)' : ''}`,
-              description: isExtension 
+              description: isExtension
                 ? `Extension: ${lineItemDescription}`
-                : duplicateBooking 
+                : duplicateBooking
                   ? `Additional Rooms: ${lineItemDescription}`
                   : lineItemDescription,
               images: property.image ? [property.image] : [],
@@ -1764,7 +1764,7 @@ export const createCheckoutSession = async (req, res) => {
       paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
       paymentStatus: 'pending'
     };
-    
+
     await savedBooking.save({ session });
 
     savedOrder.payment.stripePaymentIntentId = checkoutSession.payment_intent || checkoutSession.id;
@@ -1807,27 +1807,27 @@ export const createCheckoutSession = async (req, res) => {
   } catch (error) {
     await session.abortTransaction();
     console.error('Checkout session creation error:', error);
-    
+
     // Handle specific errors
-    if (error.message.includes('Not enough rooms available') || 
-        error.message.includes('Too many guests') ||
-        error.message.includes('Pets are not allowed') ||
-        error.message.includes('Too many pets') ||
-        error.message.includes('You already have a booking for this property on the same dates')) {
+    if (error.message.includes('Not enough rooms available') ||
+      error.message.includes('Too many guests') ||
+      error.message.includes('Pets are not allowed') ||
+      error.message.includes('Too many pets') ||
+      error.message.includes('You already have a booking for this property on the same dates')) {
       return res.status(400).json({
         success: false,
         message: error.message,
         redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
       });
     }
-    
+
     if (error.code === 11000) {
       console.error('Duplicate key error details:', {
         keyPattern: error.keyPattern,
         keyValue: error.keyValue,
         message: error.message
       });
-      
+
       return res.status(400).json({
         success: false,
         message: 'Booking conflict detected. Please try again.',
@@ -1859,30 +1859,30 @@ export const createCheckoutSession = async (req, res) => {
 // Utility function to retry operations with exponential backoff
 const retryWithBackoff = async (operation, maxRetries = 3, baseDelay = 1000) => {
   let lastError;
-  
+
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-      
+
       // Check if this is a retryable error
       const isRetryable = error.code === 112 || // WriteConflict
-                         error.code === 11000 || // DuplicateKey
-                         error.errorLabels?.includes('TransientTransactionError') ||
-                         error.message?.includes('Write conflict');
-      
+        error.code === 11000 || // DuplicateKey
+        error.errorLabels?.includes('TransientTransactionError') ||
+        error.message?.includes('Write conflict');
+
       if (!isRetryable || attempt === maxRetries - 1) {
         throw error;
       }
-      
+
       // Exponential backoff with jitter
       const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
       console.log(`Retrying operation after ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   throw lastError;
 };
 
@@ -1940,17 +1940,17 @@ const markEventProcessed = async (eventId, eventType, bookingId, orderId, status
 
 export const handleStripeWebhook = async (req, res) => {
   console.log("Running Stripe Webhook Event");
-  
+
   const sig = req.headers['stripe-signature'];
   let event;
-  
+
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
     console.error(`Webhook signature verification failed:`, err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
-  
+
   console.log(`Processing event type: ${event.type} with ID: ${event.id}`);
 
   let bookingId = null;
@@ -1979,66 +1979,66 @@ export const handleStripeWebhook = async (req, res) => {
           console.log('Checkout session completed:', session.id);
           await handleSuccessfulPayment(session);
           break;
-          
+
         case 'payment_intent.succeeded':
           const paymentIntent = event.data.object;
           console.log('Payment intent succeeded:', paymentIntent.id);
           await handlePaymentIntentSucceeded(paymentIntent);
           break;
-          
+
         case 'payment_intent.payment_failed':
           const failedPayment = event.data.object;
           console.log('Payment intent failed:', failedPayment.id);
           await handlePaymentFailed(failedPayment);
           break;
-          
+
         case 'payment_intent.canceled':
           const canceledPayment = event.data.object;
           console.log('Payment intent canceled:', canceledPayment.id);
           await handlePaymentCanceled(canceledPayment);
           break;
-          
+
         default:
           console.log(`Unhandled event type: ${event.type}`);
       }
     });
-    
+
     // Mark event as successfully processed
     await markEventProcessed(event.id, event.type, bookingId, orderId, 'processed');
-    
+
     console.log(`Successfully processed webhook event ${event.id} of type ${event.type}`);
     res.json({ received: true, status: 'processed' });
-    
+
   } catch (error) {
     console.error('Error processing webhook after retries:', error);
-    
+
     // Mark event as failed for tracking
     await markEventProcessed(event.id, event.type, bookingId, orderId, 'failed', error.message);
-    
+
     // Return 500 for retryable errors so Stripe will retry
-    const isRetryable = error.code === 112 || 
-                       error.code === 11000 || 
-                       error.errorLabels?.includes('TransientTransactionError') ||
-                       error.message?.includes('Write conflict') ||
-                       error.message?.includes('Connection') ||
-                       error.message?.includes('timeout');
-    
+    const isRetryable = error.code === 112 ||
+      error.code === 11000 ||
+      error.errorLabels?.includes('TransientTransactionError') ||
+      error.message?.includes('Write conflict') ||
+      error.message?.includes('Connection') ||
+      error.message?.includes('timeout');
+
     if (isRetryable) {
       console.log(`Retryable error for event ${event.id}: ${error.message}`);
-      res.status(500).json({ 
-        error: 'Webhook processing failed - retryable error', 
+      res.status(500).json({
+        error: 'Webhook processing failed - retryable error',
         eventId: event.id,
         code: error.code,
-        message: error.message 
+        message: error.message
       });
     } else {
       // Return 400 for non-retryable errors
       console.log(`Non-retryable error for event ${event.id}: ${error.message}`);
-      res.status(400).json({ 
+      res.status(400).json({
         error: 'Webhook processing failed - non-retryable error',
         eventId: event.id,
         code: error.code,
-        message: error.message 
+        message: error.message
       });
     }
   }
@@ -2053,7 +2053,7 @@ const getBookingDetail = async (bookingId, session = null) => {
       .populate('property')
       .populate('userId')
       .session(session);
-    
+
     if (!booking) {
       throw new Error('Booking not found');
     }
@@ -2072,7 +2072,7 @@ const getBookingDetail = async (bookingId, session = null) => {
 const sendBookingEmails = async (status, bookingId, paymentDetails = {}) => {
   try {
     const { booking, property, user } = await getBookingDetail(bookingId);
-    
+
     const bookingDetails = {
       customerName: `${user.firstname} ${user.lastname}`,
       bookingId: booking._id,
@@ -2124,7 +2124,7 @@ const sendBookingEmails = async (status, bookingId, paymentDetails = {}) => {
 
 export const getCustomerEmailTemplate = (status, bookingDetails, propertyDetails) => {
   const { customerName, bookingId, checkInDate, checkOutDate, roomType, quantity, totalAmount, guests, specialRequest } = bookingDetails;
-  
+
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -2279,7 +2279,7 @@ The Booking Team`,
         </html>
       `
     },
-    
+
     failed: {
       subject: `❌ Payment Failed - ${propertyDetails.name}`,
       text: `Dear ${customerName},
@@ -2402,7 +2402,7 @@ The Booking Team`,
         </html>
       `
     },
-    
+
     canceled: {
       subject: `⚠️ Booking Canceled - ${propertyDetails.name}`,
       text: `Dear ${customerName},
@@ -2527,7 +2527,7 @@ The Booking Team`,
 
 export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, customerDetails) => {
   const { bookingId, checkInDate, checkOutDate, roomType, quantity, totalAmount } = bookingDetails;
-  
+
   const formatDate = (date) => {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
@@ -2559,11 +2559,12 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
             <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
           </div>
         </div>
       `
     },
-    
+
     failed: {
       subject: `Payment Failed - ${bookingId}`,
       html: `
@@ -2578,12 +2579,13 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
             <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
             <p style="color: #dc3545;"><strong>Status:</strong> Payment failed - booking on hold</p>
           </div>
         </div>
       `
     },
-    
+
     canceled: {
       subject: `Booking Canceled - ${bookingId}`,
       html: `
@@ -2599,6 +2601,7 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
             <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
             <p style="color: #ffc107;"><strong>Status:</strong> Booking was canceled</p>
           </div>
         </div>
