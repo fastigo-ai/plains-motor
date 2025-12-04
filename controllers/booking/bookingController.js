@@ -7,7 +7,7 @@ import Booked from '../../modals/properties/bookedSchema.js';
 // export const getMyBookings = async (req, res) => {
 //   try {
 //     const { userId } = req.user; // Assuming user is authenticated and userId is available
-    
+
 //     const {
 //       page = 1,
 //       limit = 10,
@@ -137,7 +137,7 @@ export const getMyBookings = async (req, res) => {
     }
 
     // Filter out bookings with status "pending"
-    const bookings = await Booked.find({ 
+    const bookings = await Booked.find({
       userId,
       bookingStatus: { $ne: "pending" } // $ne means "not equal"
     })
@@ -175,9 +175,9 @@ export const getMyBookingById = async (req, res) => {
       _id: bookingId,
       userId: userId
     })
-    .populate('property', 'title location images price amenities description rating reviews')
-    .populate('userId', 'firstname lastname email mobile')
-    .lean();
+      .populate('property', 'title location images price amenities description rating reviews')
+      .populate('userId', 'firstname lastname email mobile')
+      .lean();
 
     if (!booking) {
       return res.status(404).json({
@@ -210,16 +210,16 @@ export const getMyUpcomingBookings = async (req, res) => {
     const { limit = 5 } = req.query;
 
     const now = new Date();
-    
+
     const upcomingBookings = await Booked.find({
       userId: userId,
       checkInDate: { $gte: now },
       bookingStatus: { $in: ['pending', 'confirmed'] }
     })
-    .populate('property', 'title location images price')
-    .sort({ checkInDate: 1 })
-    .limit(parseInt(limit))
-    .lean();
+      .populate('property', 'title location images price')
+      .sort({ checkInDate: 1 })
+      .limit(parseInt(limit))
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -243,29 +243,29 @@ export const getMyUpcomingBookings = async (req, res) => {
 export const getAllConfirmedBookings = async (req, res) => {
   try {
     const { sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
-    
+
     // Build sort object
     const sortOptions = {};
     sortOptions[sortBy] = sortOrder === 'desc' ? -1 : 1;
-    
+
     // Find all confirmed bookings
     const confirmedBookings = await Booked.find({
-      bookingStatus: "confirmed"
+      bookingStatus: "confirmed" || "succeeded"
     })
-    .populate('property', 'title location images price amenities rating reviews')
-    .populate('userId', 'firstname lastname email mobile')
-    .sort(sortOptions)
-    .lean();
-    
+      .populate('property', 'title location images price amenities rating reviews')
+      .populate('userId', 'firstname lastname email mobile')
+      .sort(sortOptions)
+      .lean();
+
     if (!confirmedBookings.length) {
       return res.status(200).json({
         success: false,
         message: "No confirmed bookings found"
       });
     }
-    
+
     console.log(`Found ${confirmedBookings.length} confirmed bookings`);
-    
+
     res.status(200).json({
       success: true,
       data: {
@@ -273,7 +273,7 @@ export const getAllConfirmedBookings = async (req, res) => {
         count: confirmedBookings.length
       }
     });
-    
+
   } catch (error) {
     console.error("❌ Error fetching confirmed bookings:", error);
     res.status(500).json({
