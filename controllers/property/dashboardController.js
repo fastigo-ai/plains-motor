@@ -10,17 +10,17 @@ export const getDashboardData = async (req, res) => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     const thisWeekStart = new Date(today);
     thisWeekStart.setDate(today.getDate() - today.getDay());
-    
+
     const lastWeekStart = new Date(thisWeekStart);
     lastWeekStart.setDate(lastWeekStart.getDate() - 7);
-    
+
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-    
+
     const thisYearStart = new Date(now.getFullYear(), 0, 1);
     const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
     const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31);
@@ -40,52 +40,52 @@ export const getDashboardData = async (req, res) => {
     ] = await Promise.all([
       // Total Confirmed Bookings
       Booked.countDocuments({ bookingStatus: { $in: ['confirmed', 'completed'] } }),
-      
+
       // Today's Bookings
-      Booked.countDocuments({ 
+      Booked.countDocuments({
         bookingStatus: { $in: ['confirmed', 'completed'] },
         createdAt: { $gte: today }
       }),
-      
+
       // Yesterday's Bookings for percentage calculation
       Booked.countDocuments({
         bookingStatus: { $in: ['confirmed', 'completed'] },
         createdAt: { $gte: yesterday, $lt: today }
       }),
-      
+
       // Total Revenue from confirmed bookings with succeeded payments
       Booked.aggregate([
-        { 
-          $match: { 
+        {
+          $match: {
             bookingStatus: 'confirmed',
             'payment.paymentStatus': 'succeeded'
-          } 
+          }
         },
-        { 
-          $group: { 
-            _id: null, 
-            total: { $sum: '$totalAmount' } 
-          } 
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$totalAmount' }
+          }
         }
       ]),
-      
+
       // New Customers this week
-      User.countDocuments({ 
+      User.countDocuments({
         role: 'customer',
         createdAt: { $gte: thisWeekStart }
       }),
-      
+
       // Weekly Bookings for bounce rate calculation
-      Booked.countDocuments({ 
+      Booked.countDocuments({
         createdAt: { $gte: thisWeekStart }
       }),
-      
+
       // Weekly Cancelled Bookings (for bounce rate)
-      Booked.countDocuments({ 
+      Booked.countDocuments({
         createdAt: { $gte: thisWeekStart },
         bookingStatus: 'cancelled'
       }),
-      
+
       // Sales Report - Monthly comparison
       Booked.aggregate([
         {
@@ -109,7 +109,7 @@ export const getDashboardData = async (req, res) => {
           $sort: { '_id.year': 1, '_id.month': 1 }
         }
       ]),
-      
+
       // Earnings Report - Daily data for current month
       Booked.aggregate([
         {
@@ -146,7 +146,7 @@ export const getDashboardData = async (req, res) => {
           $limit: 10 // Limit to first 10 days
         }
       ]),
-      
+
       // Payment Status Breakdown
       Booked.aggregate([
         {
@@ -159,12 +159,12 @@ export const getDashboardData = async (req, res) => {
     ]);
 
     // Calculate percentages and format data
-    const newBookingsPercentage = yesterdayBookingsResult > 0 
+    const newBookingsPercentage = yesterdayBookingsResult > 0
       ? ((todayBookingsResult - yesterdayBookingsResult) / yesterdayBookingsResult * 100).toFixed(1)
       : todayBookingsResult > 0 ? 100 : 0;
 
     // Calculate bounce rate (cancelled bookings / total bookings * 100)
-    const bounceRate = weeklyBookingsResult > 0 
+    const bounceRate = weeklyBookingsResult > 0
       ? (weeklyCancelledResult / weeklyBookingsResult * 100).toFixed(1)
       : 0;
 
@@ -179,20 +179,20 @@ export const getDashboardData = async (req, res) => {
       createdAt: { $gte: lastMonthStart, $lt: thisMonthStart }
     });
 
-    const monthlyGrowth = lastMonthBookings > 0 
+    const monthlyGrowth = lastMonthBookings > 0
       ? ((currentMonthBookings - lastMonthBookings) / lastMonthBookings * 100).toFixed(1)
       : currentMonthBookings > 0 ? 100 : 0;
 
     // Process sales report data
     const currentYear = now.getFullYear();
-    
+
     const thisYearData = salesReportResult.filter(item => item._id.year === currentYear);
     const lastYearData = salesReportResult.filter(item => item._id.year === currentYear - 1);
-    
+
     const salesChartData = {
       thisYear: thisYearData.reduce((sum, item) => sum + item.total, 0),
       lastYear: lastYearData.reduce((sum, item) => sum + item.total, 0),
-      monthlyData: Array.from({length: 12}, (_, i) => {
+      monthlyData: Array.from({ length: 12 }, (_, i) => {
         const monthData = thisYearData.find(item => item._id.month === i + 1);
         return {
           month: i + 1,
@@ -257,11 +257,11 @@ export const getDashboardData = async (req, res) => {
     const recentBookings = await Booked.find({
       bookingStatus: 'confirmed'
     })
-    .populate('userId', 'firstname lastname')
-    .populate('property', 'title')
-    .sort({ createdAt: -1 })
-    .limit(5)
-    .lean();
+      .populate('userId', 'firstname lastname')
+      .populate('property', 'title')
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
 
     // Response data
     const dashboardData = {
@@ -272,28 +272,28 @@ export const getDashboardData = async (req, res) => {
         label: 'vs Yesterday',
         trend: newBookingsPercentage > 0 ? 'up' : newBookingsPercentage < 0 ? 'down' : 'stable'
       },
-      
+
       newCustomers: {
         count: newCustomersResult,
         percentage: `${bounceRate}%`,
         label: 'Cancellation Rate',
         monthlyGrowth: `${monthlyGrowth}%`
       },
-      
+
       totalRevenue: {
         amount: totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0,
         formatted: `$${totalRevenueResult.length > 0 ? totalRevenueResult[0].total.toLocaleString() : '0'}`,
-        avgPerBooking: totalBookingsResult > 0 
+        avgPerBooking: totalBookingsResult > 0
           ? `$${((totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0) / totalBookingsResult).toFixed(2)}`
           : '$0'
       },
-      
+
       // Payment Status Breakdown
       paymentBreakdown: paymentStatusResult.reduce((acc, item) => {
         acc[item._id || 'unknown'] = item.count;
         return acc;
       }, {}),
-      
+
       // Sales Report
       salesReport: {
         period: `${new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`,
@@ -301,20 +301,20 @@ export const getDashboardData = async (req, res) => {
         comparison: {
           thisYear: salesChartData.thisYear,
           lastYear: salesChartData.lastYear,
-          growth: salesChartData.lastYear > 0 
+          growth: salesChartData.lastYear > 0
             ? ((salesChartData.thisYear - salesChartData.lastYear) / salesChartData.lastYear * 100).toFixed(1)
             : salesChartData.thisYear > 0 ? 100 : 0
         },
         monthlyData: salesChartData.monthlyData
       },
-      
+
       // Earnings Report
       earningsReport: {
         totalEarnings: `$${totalEarnings.toLocaleString()}`,
         avgDailyEarnings: `$${avgDailyEarnings.toFixed(2)}`,
         data: earningsData
       },
-      
+
       // Top Properties
       topProperties: topPropertiesResult.map(prop => ({
         id: prop._id,
@@ -323,32 +323,33 @@ export const getDashboardData = async (req, res) => {
         bookings: prop.bookingCount,
         rating: prop.avgRating || 'N/A'
       })),
-      
-      // Recent Activity
+
+      // Recent Activity - FIXED: Added null checks for userId and createdAt
       recentActivity: recentBookings.map(booking => ({
         id: booking._id,
-        customerName: booking.userId ? 
-          `${booking.userId.firstname} ${booking.userId.lastname}` : 'Guest',
+        customerName: booking.userId && booking.userId.firstname && booking.userId.lastname
+          ? `${booking.userId.firstname} ${booking.userId.lastname}`
+          : 'Guest',
         propertyName: booking.property?.title || 'Property not available',
-        amount: `$${booking.totalAmount}`,
-        date: booking.createdAt.toLocaleDateString(),
+        amount: `$${booking.totalAmount || 0}`,
+        date: booking.createdAt ? booking.createdAt.toLocaleDateString() : 'N/A',
         status: booking.bookingStatus
       })),
-      
+
       // Statistics Summary
       summary: {
         totalBookings: totalBookingsResult,
         totalRevenue: totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0,
         totalCustomers: newCustomersResult,
-        avgBookingValue: totalBookingsResult > 0 
+        avgBookingValue: totalBookingsResult > 0
           ? ((totalRevenueResult.length > 0 ? totalRevenueResult[0].total : 0) / totalBookingsResult).toFixed(2)
           : 0,
         occupancyRate: `${(100 - parseFloat(bounceRate)).toFixed(1)}%`, // Inverse of cancellation rate
         topPerformingMonth: salesChartData.monthlyData
-          .reduce((max, month) => month.revenue > max.revenue ? month : max, {revenue: 0, monthName: 'N/A'})
+          .reduce((max, month) => month.revenue > max.revenue ? month : max, { revenue: 0, monthName: 'N/A' })
           .monthName
       },
-      
+
       // Meta information
       dateRange: `01 January ${currentYear} to ${now.toLocaleDateString()}`,
       lastUpdated: now.toISOString(),
@@ -371,11 +372,11 @@ export const getDashboardData = async (req, res) => {
   }
 };
 
-// Additional helper function for date range queries
+// Additional helFper function for date range queries
 export const getDashboardDataByDateRange = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
-    
+
     if (!startDate || !endDate) {
       return res.status(400).json({
         success: false,
@@ -385,7 +386,7 @@ export const getDashboardDataByDateRange = async (req, res) => {
 
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     const dateFilter = {
       createdAt: { $gte: start, $lte: end }
     };
