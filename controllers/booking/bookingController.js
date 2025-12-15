@@ -250,7 +250,7 @@ export const getAllConfirmedBookings = async (req, res) => {
 
     // Find all confirmed bookings
     const confirmedBookings = await Booked.find({
-      bookingStatus: "confirmed" || "succeeded"
+    bookingStatus: "confirmed" || "succeeded" || "cancelled"
     })
       .populate('property', 'title location images price amenities rating reviews')
       .populate('userId', 'firstname lastname email mobile')
