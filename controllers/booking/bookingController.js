@@ -2,6 +2,7 @@
 // controllers/userBookingsController.js
 import mongoose from 'mongoose';
 import Booked from '../../modals/properties/bookedSchema.js';
+import Order from '../../modals/payment/orderSchema.js';
 
 // Get all bookings for logged-in user
 // export const getMyBookings = async (req, res) => {
@@ -129,6 +130,33 @@ import Booked from '../../modals/properties/bookedSchema.js';
 // };
 
 
+// export const getMyBookings = async (req, res) => {
+//   try {
+//     const userId = req.params.userId || req.user.id;
+//     if (!userId) {
+//       return res.status(400).json({ success: false, message: "User ID is required" });
+//     }
+
+//     // Filter out bookings with status "pending"
+//     const bookings = await Booked.find({
+//       userId,
+//       bookingStatus: { $ne: "pending" } // $ne means "not equal"
+//     })
+//       .populate("property")
+//       .sort({ createdAt: -1 });
+
+//     if (!bookings.length) { 
+//       return res.status(200).json({ success: false, message: "No bookings found" });
+//     }
+//     console.log(bookings)
+
+//     res.status(200).json({ success: true, bookings });
+//   } catch (err) {
+//     console.error("❌ Error fetching user bookings:", err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
 export const getMyBookings = async (req, res) => {
   try {
     const userId = req.params.userId || req.user.id;
@@ -136,10 +164,10 @@ export const getMyBookings = async (req, res) => {
       return res.status(400).json({ success: false, message: "User ID is required" });
     }
 
-    // Filter out bookings with status "pending"
+    // Fetch bookings excluding "pending"
     const bookings = await Booked.find({
       userId,
-      bookingStatus: { $ne: "pending" } // $ne means "not equal"
+      bookingStatus: { $ne: "pending" }
     })
       .populate("property")
       .sort({ createdAt: -1 });
@@ -147,9 +175,17 @@ export const getMyBookings = async (req, res) => {
     if (!bookings.length) {
       return res.status(200).json({ success: false, message: "No bookings found" });
     }
-    console.log(bookings)
 
-    res.status(200).json({ success: true, bookings });
+    // Attach orderId from Order collection
+    const bookingsWithOrder = await Promise.all(bookings.map(async (booking) => {
+      const order = await Order.findOne({ bookingId: booking._id }).select("orderId");
+      return {
+        ...booking.toObject(),
+        orderId: order ? order._id : null
+      };
+    }));
+
+    res.status(200).json({ success: true, bookings: bookingsWithOrder });
   } catch (err) {
     console.error("❌ Error fetching user bookings:", err);
     res.status(500).json({ success: false, message: "Server error" });
@@ -250,7 +286,7 @@ export const getAllConfirmedBookings = async (req, res) => {
 
     // Find all confirmed bookings
     const confirmedBookings = await Booked.find({
-    bookingStatus: "confirmed" || "succeeded" || "cancelled"
+      bookingStatus: "confirmed" || "succeeded" || "cancelled"
     })
       .populate('property', 'title location images price amenities rating reviews')
       .populate('userId', 'firstname lastname email mobile')
@@ -280,6 +316,103 @@ export const getAllConfirmedBookings = async (req, res) => {
       success: false,
       message: "Server error",
       error: error.message
+    });
+  }
+};
+
+
+export const getAllBookings = async (req, res) => {
+  try {
+    const {
+      status,
+      fromDate,
+      toDate,
+      search,
+      page = 1,
+      limit = 50,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    /* -------------------- FILTER -------------------- */
+    const filter = {};
+
+    // 🔹 Booking status filter
+    if (status) {
+      filter.bookingStatus = status;
+    } else {
+      filter.bookingStatus = {
+        $in: ["confirmed", "succeeded", "cancelled"],
+      };
+    }
+
+    // 🔹 Date-wise filter
+    if (fromDate || toDate) {
+      filter.createdAt = {};
+      if (fromDate) filter.createdAt.$gte = new Date(fromDate);
+      if (toDate) filter.createdAt.$lte = new Date(toDate);
+    }
+
+    /* -------------------- SORT -------------------- */
+    const sortOptions = {
+      [sortBy]: sortOrder === "desc" ? -1 : 1,
+    };
+
+    const skip = (page - 1) * limit;
+
+    /* -------------------- QUERY -------------------- */
+    let query = Booked.find(filter)
+      .populate({
+        path: "userId",
+        select: "firstname lastname email mobile",
+        match: search
+          ? {
+              $or: [
+                { firstname: { $regex: search, $options: "i" } },
+                { lastname: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+              ],
+            }
+          : {},
+      })
+      .populate(
+        "property",
+        "title location images price amenities rating"
+      )
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(Number(limit))
+      .lean();
+
+    let bookings = await query;
+
+    // 🔹 Remove bookings where user doesn't match search
+    if (search) {
+      bookings = bookings.filter(b => b.userId !== null);
+    }
+
+    const total = await Booked.countDocuments(filter);
+
+    /* -------------------- RESPONSE -------------------- */
+    return res.status(200).json({
+      success: true,
+      data: {
+        bookings,
+        pagination: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(total / limit),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching bookings:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
     });
   }
 };

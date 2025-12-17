@@ -1,12 +1,12 @@
 // controllers/bookingController.js
-import Order from '../../modals/payment/orderSchema.js';
-import Payment from '../../modals/payment/paymentSchema.js';
-import stripe from '../../config/stripe.js';
-import mongoose from 'mongoose';
-import { User } from '../../modals/auth/authModal.js';
-import Booked from '../../modals/properties/bookedSchema.js';
-import PropertyCard from '../../modals/properties/propertyModal.js';
-import { sendEmail } from '../../utils/sendEmail.js';
+import Order from "../../modals/payment/orderSchema.js";
+import Payment from "../../modals/payment/paymentSchema.js";
+import stripe from "../../config/stripe.js";
+import mongoose from "mongoose";
+import { User } from "../../modals/auth/authModal.js";
+import Booked from "../../modals/properties/bookedSchema.js";
+import PropertyCard from "../../modals/properties/propertyModal.js";
+import { sendEmail } from "../../utils/sendEmail.js";
 
 // Table update helper function
 // Table update helper function
@@ -119,7 +119,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     } = req.body;
 
 //     // Validate required fields
-//     if (!propertyId || !userId || !checkInDate || !checkOutDate || !totalStay || 
+//     if (!propertyId || !userId || !checkInDate || !checkOutDate || !totalStay ||
 //         !roomType || !quantity || !allowedPersonsPerRoom || !guests || !totalAmount) {
 //       await session.abortTransaction();
 //       return res.status(400).json({
@@ -151,12 +151,12 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //     // Validate room availability FIRST
 //     const roomAvailability = await updateRoomAvailability(
-//       propertyId, 
-//       checkInDate, 
-//       checkOutDate, 
-//       roomType, 
-//       quantity, 
-//       'book', 
+//       propertyId,
+//       checkInDate,
+//       checkOutDate,
+//       roomType,
+//       quantity,
+//       'book',
 //       session
 //     );
 
@@ -244,7 +244,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //     // Check for exact same dates by same user
 //     const duplicateBooking = existingUserBookings.find(booking => {
-//       return booking.checkInDate.getTime() === checkIn.getTime() && 
+//       return booking.checkInDate.getTime() === checkIn.getTime() &&
 //              booking.checkOutDate.getTime() === checkOut.getTime();
 //     });
 
@@ -346,7 +346,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //       // Append special request if provided
 //       if (specialRequest) {
-//         originalBooking.specialRequest = originalBooking.specialRequest 
+//         originalBooking.specialRequest = originalBooking.specialRequest
 //           ? `${originalBooking.specialRequest}; ${specialRequest}`
 //           : specialRequest;
 //       }
@@ -439,9 +439,9 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //             currency: currency,
 //             product_data: {
 //               name: `${property.name} ${isExtension ? '(Extension)' : duplicateBooking ? '(Additional Rooms)' : ''}`,
-//               description: isExtension 
+//               description: isExtension
 //                 ? `Extension: ${lineItemDescription}`
-//                 : duplicateBooking 
+//                 : duplicateBooking
 //                   ? `Additional Rooms: ${lineItemDescription}`
 //                   : lineItemDescription,
 //               images: property.image ? [property.image] : [],
@@ -566,7 +566,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //     console.error('Checkout session creation error:', error);
 
 //     // Handle specific errors
-//     if (error.message.includes('Not enough rooms available') || 
+//     if (error.message.includes('Not enough rooms available') ||
 //         error.message.includes('Too many guests') ||
 //         error.message.includes('Pets are not allowed') ||
 //         error.message.includes('Too many pets') ||
@@ -627,7 +627,6 @@ import { sendEmail } from '../../utils/sendEmail.js';
 
 //   console.log(`Processing event type: ${event.type}`);
 
-
 //   try {
 //     switch (event.type) {
 //       case 'checkout.session.completed':
@@ -654,7 +653,7 @@ import { sendEmail } from '../../utils/sendEmail.js';
 //         break;
 
 //       case 'payment_intent.payment_failed':
-//         const failedPayment = event.data.object;  
+//         const failedPayment = event.data.object;
 //         await handlePaymentFailed(failedPayment);
 //         await sendEmail({
 //           to: session.customer_details.email,
@@ -692,122 +691,146 @@ const handleSuccessfulPayment = async (session) => {
     const mongoSession = await mongoose.startSession();
 
     try {
-      await mongoSession.withTransaction(async () => {
-        console.log('Processing successful payment for session:', session.id);
-        console.log('Session metadata:', session.metadata);
+      await mongoSession.withTransaction(
+        async () => {
+          console.log("Processing successful payment for session:", session.id);
+          console.log("Session metadata:", session.metadata);
 
-        const { orderId, bookingId, propertyId, isExtension, isAdditionalRooms, bookingAction } = session.metadata;
-
-        if (!orderId || !bookingId) {
-          throw new Error('Missing required metadata in session');
-        }
-
-        // Check if booking is already confirmed to prevent duplicate processing
-        const existingBooking = await Booked.findById(bookingId).session(mongoSession);
-        if (!existingBooking) {
-          throw new Error(`Booking not found: ${bookingId}`);
-        }
-
-        if (existingBooking.bookingStatus === 'confirmed' && existingBooking.payment?.paymentIntentId === session.payment_intent) {
-          console.log(`Payment already processed for booking: ${bookingId}`);
-          return; // Skip processing if already confirmed with same payment intent
-        }
-
-        // Use findOneAndUpdate for atomic updates to prevent write conflicts
-        const updatedBooking = await Booked.findByIdAndUpdate(
-          bookingId,
-          {
-            $set: {
-              bookingStatus: 'confirmed',
-              'payment.paymentStatus': 'succeeded',
-              'payment.paymentIntentId': session.payment_intent,
-              'payment.updatedAt': new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
-          }
-        );
-
-        if (!updatedBooking) {
-          throw new Error(`Failed to update booking: ${bookingId}`);
-        }
-
-        // Update order status atomically
-        const updatedOrder = await Order.findByIdAndUpdate(
-          orderId,
-          {
-            $set: {
-              status: 'confirmed',
-              'payment.stripePaymentStatus': 'succeeded',
-              'payment.stripePaymentIntentId': session.payment_intent,
-              'payment.updatedAt': new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
-          }
-        );
-
-        if (!updatedOrder) {
-          throw new Error(`Failed to update order: ${orderId}`);
-        }
-
-        // Update payment record atomically
-        const paymentUpdate = {
-          $set: {
-            status: 'succeeded',
-            'stripe.status': 'succeeded',
-            updatedAt: new Date()
-          }
-        };
-
-        // Add payment method details if available
-        if (session.payment_method_types && session.payment_method_types.length > 0) {
-          paymentUpdate.$set['paymentMethod.type'] = session.payment_method_types[0];
-        }
-
-        await Payment.findOneAndUpdate(
-          { bookingId: bookingId },
-          paymentUpdate,
-          {
-            session: mongoSession,
-            new: true,
-            upsert: false
-          }
-        );
-
-        // Update room availability if needed
-        if (propertyId) {
-          await updateRoomAvailability(
+          const {
+            orderId,
+            bookingId,
             propertyId,
-            updatedBooking.checkInDate,
-            updatedBooking.checkOutDate,
-            updatedBooking.roomDetails.roomType,
-            updatedBooking.roomDetails.quantity,
-            'confirm',
+            isExtension,
+            isAdditionalRooms,
+            bookingAction,
+          } = session.metadata;
+
+          if (!orderId || !bookingId) {
+            throw new Error("Missing required metadata in session");
+          }
+
+          // Check if booking is already confirmed to prevent duplicate processing
+          const existingBooking = await Booked.findById(bookingId).session(
             mongoSession
           );
+          if (!existingBooking) {
+            throw new Error(`Booking not found: ${bookingId}`);
+          }
+
+          if (
+            existingBooking.bookingStatus === "confirmed" &&
+            existingBooking.payment?.paymentIntentId === session.payment_intent
+          ) {
+            console.log(`Payment already processed for booking: ${bookingId}`);
+            return; // Skip processing if already confirmed with same payment intent
+          }
+
+          // Use findOneAndUpdate for atomic updates to prevent write conflicts
+          const updatedBooking = await Booked.findByIdAndUpdate(
+            bookingId,
+            {
+              $set: {
+                bookingStatus: "confirmed",
+                "payment.paymentStatus": "succeeded",
+                "payment.paymentIntentId": session.payment_intent,
+                "payment.updatedAt": new Date(),
+              },
+            },
+            {
+              session: mongoSession,
+              new: true,
+              runValidators: true,
+            }
+          );
+
+          if (!updatedBooking) {
+            throw new Error(`Failed to update booking: ${bookingId}`);
+          }
+
+          // Update order status atomically
+          const updatedOrder = await Order.findByIdAndUpdate(
+            orderId,
+            {
+              $set: {
+                status: "confirmed",
+                "payment.stripePaymentStatus": "succeeded",
+                "payment.stripePaymentIntentId": session.payment_intent,
+                "payment.updatedAt": new Date(),
+              },
+            },
+            {
+              session: mongoSession,
+              new: true,
+              runValidators: true,
+            }
+          );
+
+          if (!updatedOrder) {
+            throw new Error(`Failed to update order: ${orderId}`);
+          }
+
+          // Update payment record atomically
+          const paymentUpdate = {
+            $set: {
+              status: "succeeded",
+              "stripe.status": "succeeded",
+              updatedAt: new Date(),
+            },
+          };
+
+          // Add payment method details if available
+          if (
+            session.payment_method_types &&
+            session.payment_method_types.length > 0
+          ) {
+            paymentUpdate.$set["paymentMethod.type"] =
+              session.payment_method_types[0];
+          }
+
+          await Payment.findOneAndUpdate(
+            { bookingId: bookingId },
+            paymentUpdate,
+            {
+              session: mongoSession,
+              new: true,
+              upsert: false,
+            }
+          );
+
+          // Update room availability if needed
+          if (propertyId) {
+            await updateRoomAvailability(
+              propertyId,
+              updatedBooking.checkInDate,
+              updatedBooking.checkOutDate,
+              updatedBooking.roomDetails.roomType,
+              updatedBooking.roomDetails.quantity,
+              "confirm",
+              mongoSession
+            );
+          }
+        },
+        {
+          readPreference: "primary",
+          readConcern: { level: "majority" },
+          writeConcern: { w: "majority", j: true },
         }
-      }, {
-        readPreference: 'primary',
-        readConcern: { level: 'majority' },
-        writeConcern: { w: 'majority', j: true }
-      });
+      );
 
       // Send emails after successful transaction (outside of transaction to avoid delays)
       try {
-        await sendBookingEmails('confirmed', session.metadata.bookingId, session);
-        console.log(`Payment successful for booking: ${session.metadata.bookingId}, action: ${session.metadata.bookingAction}`);
+        await sendBookingEmails(
+          "confirmed",
+          session.metadata.bookingId,
+          session
+        );
+        console.log(
+          `Payment successful for booking: ${session.metadata.bookingId}, action: ${session.metadata.bookingAction}`
+        );
       } catch (emailError) {
-        console.error('Error sending booking emails:', emailError);
+        console.error("Error sending booking emails:", emailError);
         // Don't throw here as the payment was successful
       }
-
     } finally {
       await mongoSession.endSession();
     }
@@ -820,126 +843,144 @@ const handlePaymentIntentSucceeded = async (paymentIntent) => {
     const mongoSession = await mongoose.startSession();
 
     try {
-      await mongoSession.withTransaction(async () => {
-        console.log('Processing payment intent succeeded:', paymentIntent.id);
-        console.log('Payment intent metadata:', paymentIntent.metadata);
+      await mongoSession.withTransaction(
+        async () => {
+          console.log("Processing payment intent succeeded:", paymentIntent.id);
+          console.log("Payment intent metadata:", paymentIntent.metadata);
 
-        const { orderId, bookingId, propertyId, bookingAction } = paymentIntent.metadata;
+          const { orderId, bookingId, propertyId, bookingAction } =
+            paymentIntent.metadata;
 
-        if (!orderId || !bookingId) {
-          console.log('Missing metadata in payment intent, skipping...');
-          return;
-        }
+          if (!orderId || !bookingId) {
+            console.log("Missing metadata in payment intent, skipping...");
+            return;
+          }
 
-        // Check if already processed by checkout.session.completed
-        const existingBooking = await Booked.findById(bookingId).session(mongoSession);
-        if (!existingBooking) {
-          console.log(`Booking not found: ${bookingId}`);
-          return;
-        }
+          // Check if already processed by checkout.session.completed
+          const existingBooking = await Booked.findById(bookingId).session(
+            mongoSession
+          );
+          if (!existingBooking) {
+            console.log(`Booking not found: ${bookingId}`);
+            return;
+          }
 
-        if (existingBooking.bookingStatus === 'confirmed') {
-          console.log('Payment already processed by checkout.session.completed or previous payment_intent.succeeded');
-          return;
-        }
+          if (existingBooking.bookingStatus === "confirmed") {
+            console.log(
+              "Payment already processed by checkout.session.completed or previous payment_intent.succeeded"
+            );
+            return;
+          }
 
-        // Use atomic updates to prevent write conflicts
-        const updatedBooking = await Booked.findByIdAndUpdate(
-          bookingId,
-          {
-            $set: {
-              bookingStatus: 'confirmed',
-              'payment.paymentStatus': 'succeeded',
-              'payment.paymentIntentId': paymentIntent.id,
-              'payment.updatedAt': new Date()
+          // Use atomic updates to prevent write conflicts
+          const updatedBooking = await Booked.findByIdAndUpdate(
+            bookingId,
+            {
+              $set: {
+                bookingStatus: "confirmed",
+                "payment.paymentStatus": "succeeded",
+                "payment.paymentIntentId": paymentIntent.id,
+                "payment.updatedAt": new Date(),
+              },
+            },
+            {
+              session: mongoSession,
+              new: true,
+              runValidators: true,
             }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
+          );
+
+          if (!updatedBooking) {
+            throw new Error(`Failed to update booking: ${bookingId}`);
           }
-        );
 
-        if (!updatedBooking) {
-          throw new Error(`Failed to update booking: ${bookingId}`);
-        }
-
-        // Update order status atomically
-        await Order.findByIdAndUpdate(
-          orderId,
-          {
-            $set: {
-              status: 'confirmed',
-              'payment.stripePaymentStatus': 'succeeded',
-              'payment.stripePaymentIntentId': paymentIntent.id,
-              'payment.updatedAt': new Date()
+          // Update order status atomically
+          await Order.findByIdAndUpdate(
+            orderId,
+            {
+              $set: {
+                status: "confirmed",
+                "payment.stripePaymentStatus": "succeeded",
+                "payment.stripePaymentIntentId": paymentIntent.id,
+                "payment.updatedAt": new Date(),
+              },
+            },
+            {
+              session: mongoSession,
+              new: true,
+              runValidators: true,
             }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
-          }
-        );
+          );
 
-        // Update payment record atomically
-        const paymentUpdate = {
-          $set: {
-            status: 'succeeded',
-            'stripe.status': 'succeeded',
-            updatedAt: new Date()
-          }
-        };
+          // Update payment record atomically
+          const paymentUpdate = {
+            $set: {
+              status: "succeeded",
+              "stripe.status": "succeeded",
+              updatedAt: new Date(),
+            },
+          };
 
-        // Add charge details if available
-        if (paymentIntent.charges && paymentIntent.charges.data.length > 0) {
-          const charge = paymentIntent.charges.data[0];
-          paymentUpdate.$set['stripe.charges'] = [{
-            chargeId: charge.id,
-            amount: charge.amount,
-            status: charge.status,
-            receiptUrl: charge.receipt_url,
-            created: new Date(charge.created * 1000)
-          }];
+          // Add charge details if available
+          if (paymentIntent.charges && paymentIntent.charges.data.length > 0) {
+            const charge = paymentIntent.charges.data[0];
+            paymentUpdate.$set["stripe.charges"] = [
+              {
+                chargeId: charge.id,
+                amount: charge.amount,
+                status: charge.status,
+                receiptUrl: charge.receipt_url,
+                created: new Date(charge.created * 1000),
+              },
+            ];
 
-          // Add payment method details
-          if (charge.payment_method_details && charge.payment_method_details.card) {
-            const card = charge.payment_method_details.card;
-            paymentUpdate.$set.paymentMethod = {
-              type: 'card',
-              last4: card.last4,
-              brand: card.brand,
-              expMonth: card.exp_month,
-              expYear: card.exp_year
-            };
+            // Add payment method details
+            if (
+              charge.payment_method_details &&
+              charge.payment_method_details.card
+            ) {
+              const card = charge.payment_method_details.card;
+              paymentUpdate.$set.paymentMethod = {
+                type: "card",
+                last4: card.last4,
+                brand: card.brand,
+                expMonth: card.exp_month,
+                expYear: card.exp_year,
+              };
+            }
           }
+
+          await Payment.findOneAndUpdate(
+            { bookingId: bookingId },
+            paymentUpdate,
+            {
+              session: mongoSession,
+              new: true,
+              upsert: false,
+            }
+          );
+        },
+        {
+          readPreference: "primary",
+          readConcern: { level: "majority" },
+          writeConcern: { w: "majority", j: true },
         }
-
-        await Payment.findOneAndUpdate(
-          { bookingId: bookingId },
-          paymentUpdate,
-          {
-            session: mongoSession,
-            new: true,
-            upsert: false
-          }
-        );
-      }, {
-        readPreference: 'primary',
-        readConcern: { level: 'majority' },
-        writeConcern: { w: 'majority', j: true }
-      });
+      );
 
       // Send emails after successful transaction
       try {
-        await sendBookingEmails('confirmed', paymentIntent.metadata.bookingId, paymentIntent);
-        console.log(`Payment intent succeeded for booking: ${paymentIntent.metadata.bookingId}, action: ${paymentIntent.metadata.bookingAction}`);
+        await sendBookingEmails(
+          "confirmed",
+          paymentIntent.metadata.bookingId,
+          paymentIntent
+        );
+        console.log(
+          `Payment intent succeeded for booking: ${paymentIntent.metadata.bookingId}, action: ${paymentIntent.metadata.bookingAction}`
+        );
       } catch (emailError) {
-        console.error('Error sending booking emails:', emailError);
+        console.error("Error sending booking emails:", emailError);
         // Don't throw here as the payment was successful
       }
-
     } finally {
       await mongoSession.endSession();
     }
@@ -952,98 +993,106 @@ const handlePaymentFailed = async (failedPayment) => {
     const mongoSession = await mongoose.startSession();
 
     try {
-      await mongoSession.withTransaction(async () => {
-        console.log('Processing payment failed:', failedPayment.id);
-        console.log('Failed payment metadata:', failedPayment.metadata);
+      await mongoSession.withTransaction(
+        async () => {
+          console.log("Processing payment failed:", failedPayment.id);
+          console.log("Failed payment metadata:", failedPayment.metadata);
 
-        const { orderId, bookingId, propertyId } = failedPayment.metadata;
+          const { orderId, bookingId, propertyId } = failedPayment.metadata;
 
-        if (!orderId || !bookingId) {
-          console.log('Missing metadata in failed payment, skipping...');
-          return;
-        }
-
-        // Update booking status atomically
-        const updatedBooking = await Booked.findByIdAndUpdate(
-          bookingId,
-          {
-            $set: {
-              bookingStatus: 'cancelled',
-              'payment.paymentStatus': 'failed',
-              'payment.paymentIntentId': failedPayment.id,
-              'payment.updatedAt': new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
+          if (!orderId || !bookingId) {
+            console.log("Missing metadata in failed payment, skipping...");
+            return;
           }
-        );
 
-        // Update order status atomically
-        if (updatedBooking) {
-          await Order.findByIdAndUpdate(
-            orderId,
+          // Update booking status atomically
+          const updatedBooking = await Booked.findByIdAndUpdate(
+            bookingId,
             {
               $set: {
-                status: 'cancelled',
-                'payment.stripePaymentStatus': 'failed',
-                'payment.stripePaymentIntentId': failedPayment.id,
-                'payment.updatedAt': new Date()
-              }
+                bookingStatus: "cancelled",
+                "payment.paymentStatus": "failed",
+                "payment.paymentIntentId": failedPayment.id,
+                "payment.updatedAt": new Date(),
+              },
             },
             {
               session: mongoSession,
               new: true,
-              runValidators: true
+              runValidators: true,
             }
           );
-        }
 
-        // Update payment record atomically
-        await Payment.findOneAndUpdate(
-          { bookingId: bookingId },
-          {
-            $set: {
-              status: 'failed',
-              'stripe.status': 'failed',
-              updatedAt: new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            upsert: false
+          // Update order status atomically
+          if (updatedBooking) {
+            await Order.findByIdAndUpdate(
+              orderId,
+              {
+                $set: {
+                  status: "cancelled",
+                  "payment.stripePaymentStatus": "failed",
+                  "payment.stripePaymentIntentId": failedPayment.id,
+                  "payment.updatedAt": new Date(),
+                },
+              },
+              {
+                session: mongoSession,
+                new: true,
+                runValidators: true,
+              }
+            );
           }
-        );
 
-        // Release room availability
-        if (propertyId && updatedBooking) {
-          await updateRoomAvailability(
-            propertyId,
-            updatedBooking.checkInDate,
-            updatedBooking.checkOutDate,
-            updatedBooking.roomDetails.roomType,
-            updatedBooking.roomDetails.quantity,
-            'cancel',
-            mongoSession
+          // Update payment record atomically
+          await Payment.findOneAndUpdate(
+            { bookingId: bookingId },
+            {
+              $set: {
+                status: "failed",
+                "stripe.status": "failed",
+                updatedAt: new Date(),
+              },
+            },
+            {
+              session: mongoSession,
+              new: true,
+              upsert: false,
+            }
           );
+
+          // Release room availability
+          if (propertyId && updatedBooking) {
+            await updateRoomAvailability(
+              propertyId,
+              updatedBooking.checkInDate,
+              updatedBooking.checkOutDate,
+              updatedBooking.roomDetails.roomType,
+              updatedBooking.roomDetails.quantity,
+              "cancel",
+              mongoSession
+            );
+          }
+        },
+        {
+          readPreference: "primary",
+          readConcern: { level: "majority" },
+          writeConcern: { w: "majority", j: true },
         }
-      }, {
-        readPreference: 'primary',
-        readConcern: { level: 'majority' },
-        writeConcern: { w: 'majority', j: true }
-      });
+      );
 
       // Send emails after successful transaction
       try {
-        await sendBookingEmails('failed', failedPayment.metadata.bookingId, failedPayment);
-        console.log(`Payment failed for booking: ${failedPayment.metadata.bookingId}`);
+        await sendBookingEmails(
+          "failed",
+          failedPayment.metadata.bookingId,
+          failedPayment
+        );
+        console.log(
+          `Payment failed for booking: ${failedPayment.metadata.bookingId}`
+        );
       } catch (emailError) {
-        console.error('Error sending booking emails:', emailError);
+        console.error("Error sending booking emails:", emailError);
       }
-
     } finally {
       await mongoSession.endSession();
     }
@@ -1051,108 +1100,192 @@ const handlePaymentFailed = async (failedPayment) => {
 };
 
 // Handle payment canceled
-const handlePaymentCanceled = async (canceledPayment) => {
-  return await retryWithBackoff(async () => {
-    const mongoSession = await mongoose.startSession();
+// export const handlePaymentCanceled = async (canceledPayment) => {
+//   return await retryWithBackoff(async () => {
+//     const mongoSession = await mongoose.startSession();
 
-    try {
-      await mongoSession.withTransaction(async () => {
-        console.log('Processing payment canceled:', canceledPayment.id);
-        console.log('Canceled payment metadata:', canceledPayment.metadata);
+//     try {
+//       await mongoSession.withTransaction(
+//         async () => {
+//           console.log("Processing payment :", canceledPayment.body);
+//           // console.log("Processing payment canceled:", canceledPayment.id);
+//           // console.log("Canceled payment metadata:", canceledPayment.metadata);
 
-        const { orderId, bookingId, propertyId } = canceledPayment.metadata;
+//           const { orderId, bookingId, propertyId } = canceledPayment.body;
 
-        if (!orderId || !bookingId) {
-          console.log('Missing metadata in canceled payment, skipping...');
-          return;
-        }
+//           console.log("OrderID",orderId);
+          
 
-        // Update booking status atomically
-        const updatedBooking = await Booked.findByIdAndUpdate(
-          bookingId,
-          {
-            $set: {
-              bookingStatus: 'cancelled',
-              'payment.paymentStatus': 'failed',
-              'payment.paymentIntentId': canceledPayment.id,
-              'payment.updatedAt': new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            runValidators: true
-          }
-        );
+//           if (!orderId || !bookingId) {
+//             console.warn(
+//               "Missing metadata in canceled payment, skipping processing",
+//               canceledPayment.id
+//             );
+//             return; // still safe
+//           }
 
-        // Update order status atomically
-        if (updatedBooking) {
-          await Order.findByIdAndUpdate(
-            orderId,
-            {
-              $set: {
-                status: 'cancelled',
-                'payment.stripePaymentStatus': 'canceled',
-                'payment.stripePaymentIntentId': canceledPayment.id,
-                'payment.updatedAt': new Date()
-              }
-            },
-            {
-              session: mongoSession,
-              new: true,
-              runValidators: true
-            }
-          );
-        }
+//           // Update booking status atomically
+//           const updatedBooking = await Booked.findByIdAndUpdate(
+//             bookingId,
+//             {
+//               $set: {
+//                 bookingStatus: "cancelled",
+//                 "payment.paymentStatus": "failed",
+//                 "payment.paymentIntentId": canceledPayment.id,
+//                 "payment.updatedAt": new Date(),
+//               },
+//             },
+//             {
+//               session: mongoSession,
+//               new: true,
+//               runValidators: true,
+//             }
+//           );
 
-        // Update payment record atomically
-        await Payment.findOneAndUpdate(
-          { bookingId: bookingId },
-          {
-            $set: {
-              status: 'failed',
-              'stripe.status': 'cancelled',
-              updatedAt: new Date()
-            }
-          },
-          {
-            session: mongoSession,
-            new: true,
-            upsert: false
-          }
-        );
+//           // Update order status atomically
+//           if (updatedBooking) {
+//             await Order.findByIdAndUpdate(
+//               orderId,
+//               {
+//                 $set: {
+//                   status: "cancelled",
+//                   "payment.stripePaymentStatus": "canceled",
+//                   "payment.stripePaymentIntentId": canceledPayment.id,
+//                   "payment.updatedAt": new Date(),
+//                 },
+//               },
+//               {
+//                 session: mongoSession,
+//                 new: true,
+//                 runValidators: true,
+//               }
+//             );
+//           }
 
-        // Release room availability
-        if (propertyId && updatedBooking) {
-          await updateRoomAvailability(
-            propertyId,
-            updatedBooking.checkInDate,
-            updatedBooking.checkOutDate,
-            updatedBooking.roomDetails.roomType,
-            updatedBooking.roomDetails.quantity,
-            'cancel',
-            mongoSession
-          );
-        }
-      }, {
-        readPreference: 'primary',
-        readConcern: { level: 'majority' },
-        writeConcern: { w: 'majority', j: true }
-      });
+//           // Update payment record atomically
+//           await Payment.findOneAndUpdate(
+//             { bookingId: bookingId },
+//             {
+//               $set: {
+//                 status: "failed",
+//                 "stripe.status": "cancelled",
+//                 updatedAt: new Date(),
+//               },
+//             },
+//             {
+//               session: mongoSession,
+//               new: true,
+//               upsert: false,
+//             }
+//           );
 
-      // Send emails after successful transaction
-      try {
-        await sendBookingEmails('canceled', canceledPayment.metadata.bookingId, canceledPayment);
-        console.log(`Payment canceled for booking: ${canceledPayment.metadata.bookingId}`);
-      } catch (emailError) {
-        console.error('Error sending booking emails:', emailError);
+//           // Release room availability
+//           if (propertyId && updatedBooking) {
+//             await updateRoomAvailability(
+//               propertyId,
+//               updatedBooking.checkInDate,
+//               updatedBooking.checkOutDate,
+//               updatedBooking.roomDetails.roomType,
+//               updatedBooking.roomDetails.quantity,
+//               "cancel",
+//               mongoSession
+//             );
+//           }
+//         },
+//         {
+//           readPreference: "primary",
+//           readConcern: { level: "majority" },
+//           writeConcern: { w: "majority", j: true },
+//         }
+//       );
+
+//       // Send emails after successful transaction
+//       try {
+//         await sendBookingEmails(
+//           "canceled",
+//           canceledPayment.body.bookingId,
+//           canceledPayment
+//         );
+//         console.log(
+//           `Payment canceled for booking: ${canceledPayment.body.bookingId}`
+//         );
+//       } catch (emailError) {
+//         console.error("Error sending booking emails:", emailError);
+//       }
+//     } finally {
+//       await mongoSession.endSession();
+//     }
+//   });
+// };
+
+export const handlePaymentCanceled = async (canceledPayment) => {
+  const mongoSession = await mongoose.startSession();
+
+  try {
+    await mongoSession.withTransaction(async () => {
+      const { orderId, bookingId, propertyId } = canceledPayment.body;
+
+      if (!orderId || !bookingId) {
+        console.warn("Missing metadata, skipping cancel");
+        return;
       }
 
-    } finally {
-      await mongoSession.endSession();
-    }
-  });
+      const updatedBooking = await Booked.findByIdAndUpdate(
+        bookingId,
+        {
+          bookingStatus: "cancelled",
+          "payment.paymentStatus": "failed",
+          "payment.paymentIntentId": canceledPayment.id,
+          "payment.updatedAt": new Date(),
+        },
+        { session: mongoSession, new: true }
+      );
+
+      if (updatedBooking) {
+        await Order.findByIdAndUpdate(
+          orderId,
+          {
+            status: "cancelled",
+            "payment.stripePaymentStatus": "canceled",
+            "payment.stripePaymentIntentId": canceledPayment.id,
+          },
+          { session: mongoSession }
+        );
+      }
+
+      await Payment.findOneAndUpdate(
+        { bookingId },
+        {
+          status: "failed",
+          "stripe.status": "cancelled",
+        },
+        { session: mongoSession }
+      );
+
+      if (propertyId && updatedBooking) {
+        await updateRoomAvailability(
+          propertyId,
+          updatedBooking.checkInDate,
+          updatedBooking.checkOutDate,
+          updatedBooking.roomDetails.roomType,
+          updatedBooking.roomDetails.quantity,
+          "cancel",
+          mongoSession
+        );
+      }
+    });
+
+    // 🔹 Emails AFTER DB commit
+    sendBookingEmails("canceled", canceledPayment.body.bookingId)
+      .catch(console.error);
+
+  } catch (err) {
+    console.error("❌ Cancel processing failed:", err);
+  } finally {
+    await mongoSession.endSession();
+  }
 };
+
 // Get booking details after successful payment
 export const getBookingDetails = async (req, res) => {
   try {
@@ -1164,27 +1297,27 @@ export const getBookingDetails = async (req, res) => {
     if (!session) {
       return res.status(404).json({
         success: false,
-        message: 'Session not found'
+        message: "Session not found",
       });
     }
 
     // Find booking by session ID
     const booking = await Booked.findOne({
-      'payment.paymentIntentId': sessionId
+      "payment.paymentIntentId": sessionId,
     })
-      .populate('property', 'name title price image')
-      .populate('userId', 'firstname lastname email mobile');
+      .populate("property", "name title price image")
+      .populate("userId", "firstname lastname email mobile");
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found'
+        message: "Booking not found",
       });
     }
 
     // Find order
     const order = await Order.findOne({
-      'payment.stripePaymentIntentId': sessionId
+      "payment.stripePaymentIntentId": sessionId,
     });
 
     res.json({
@@ -1195,16 +1328,15 @@ export const getBookingDetails = async (req, res) => {
         id: session.id,
         payment_status: session.payment_status,
         amount_total: session.amount_total,
-        currency: session.currency
-      }
+        currency: session.currency,
+      },
     });
-
   } catch (error) {
-    console.error('Error fetching booking details:', error);
+    console.error("Error fetching booking details:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch booking details',
-      error: error.message
+      message: "Failed to fetch booking details",
+      error: error.message,
     });
   }
 };
@@ -1214,48 +1346,61 @@ export const getUserBookings = async (req, res) => {
   try {
     const { userId } = req.user;
     const bookings = await Booked.find({ userId })
-      .populate('property', 'name title price image')
-      .populate('userId', 'firstname lastname email mobile')
+      .populate("property", "name title price image")
+      .populate("userId", "firstname lastname email mobile")
       .sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      bookings
+      bookings,
     });
-
   } catch (error) {
-    console.error('Error fetching user bookings:', error);
+    console.error("Error fetching user bookings:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch bookings',
-      error: error.message
+      message: "Failed to fetch bookings",
+      error: error.message,
     });
   }
 };
 
-//// New Updated controller with the email 
-export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDate, roomType, quantity, action = 'book', session = null) => {
+//// New Updated controller with the email
+export const updateRoomAvailability = async (
+  propertyId,
+  checkInDate,
+  checkOutDate,
+  roomType,
+  quantity,
+  action = "book",
+  session = null
+) => {
   try {
     // Get property details
-    const property = await PropertyCard.findById(propertyId).populate('detail').session(session);
+    const property = await PropertyCard.findById(propertyId)
+      .populate("detail")
+      .session(session);
     if (!property || !property.detail) {
-      throw new Error('Property or property details not found');
+      throw new Error("Property or property details not found");
     }
 
-    console.log(property)
-    console.log(property.detail)
-    console.log(roomType)
+    console.log(property);
+    console.log(property.detail);
+    console.log(roomType);
     const propertyDetail = property.detail;
 
-    console.log(propertyDetail.roomType, "roomType")
+    console.log(propertyDetail.roomType, "roomType");
     // Validate room type matches
     if (propertyDetail.roomType !== roomType) {
-      throw new Error(`Room type mismatch. Property has ${propertyDetail.roomType} rooms, requested ${roomType}`);
+      throw new Error(
+        `Room type mismatch. Property has ${propertyDetail.roomType} rooms, requested ${roomType}`
+      );
     }
 
     // Check if enough rooms are available
-    if (action === 'book' && propertyDetail.quantity < quantity) {
-      throw new Error(`Not enough ${roomType} rooms available. Available: ${propertyDetail.quantity}, Requested: ${quantity}`);
+    if (action === "book" && propertyDetail.quantity < quantity) {
+      throw new Error(
+        `Not enough ${roomType} rooms available. Available: ${propertyDetail.quantity}, Requested: ${quantity}`
+      );
     }
 
     // Calculate date range for checking conflicts
@@ -1265,13 +1410,13 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     // Check for booking conflicts in the date range
     const conflictingBookings = await Booked.find({
       property: propertyId,
-      bookingStatus: { $in: ['confirmed', 'completed'] },
+      bookingStatus: { $in: ["confirmed", "completed"] },
       $or: [
         {
           checkInDate: { $lt: checkOut },
-          checkOutDate: { $gt: checkIn }
-        }
-      ]
+          checkOutDate: { $gt: checkIn },
+        },
+      ],
     }).session(session);
 
     // Calculate total rooms booked during the period
@@ -1282,8 +1427,10 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
     // Check availability
     const availableRooms = propertyDetail.quantity - roomsBookedInPeriod;
 
-    if (action === 'book' && availableRooms < quantity) {
-      throw new Error(`Not enough rooms available for selected dates. Available: ${availableRooms}, Requested: ${quantity}`);
+    if (action === "book" && availableRooms < quantity) {
+      throw new Error(
+        `Not enough rooms available for selected dates. Available: ${availableRooms}, Requested: ${quantity}`
+      );
     }
 
     // Update property stock status based on availability
@@ -1297,18 +1444,17 @@ export const updateRoomAvailability = async (propertyId, checkInDate, checkOutDa
       );
     }
 
-    console.log(shouldBeInStock, "adads")
+    console.log(shouldBeInStock, "adads");
 
     return {
       success: true,
       availableRooms,
       totalRooms: propertyDetail.quantity,
       roomsBookedInPeriod,
-      propertyDetail
+      propertyDetail,
     };
-
   } catch (error) {
-    console.error('Room availability update error:', error);
+    console.error("Room availability update error:", error);
     throw error;
   }
 };
@@ -1335,40 +1481,50 @@ export const createCheckoutSession = async (req, res) => {
         smokingRoomCharge = 0,
         isPetFriendly = false,
         pets = 0,
-        petFeePerPet = 0
+        petFeePerPet = 0,
       },
       guests,
-      specialRequest = '',
+      specialRequest = "",
       user: {
         firstname,
         lastname,
         phone,
-        email  // Accept email in the request
+        email, // Accept email in the request
       },
       totalAmount,
-      currency = 'cad'
+      currency = "cad",
     } = req.body;
 
     // Validate required fields
-    if (!propertyId || !userId || !checkInDate || !checkOutDate || !totalStay ||
-      !roomType || !quantity || !allowedPersonsPerRoom || !guests || !totalAmount) {
+    if (
+      !propertyId ||
+      !userId ||
+      !checkInDate ||
+      !checkOutDate ||
+      !totalStay ||
+      !roomType ||
+      !quantity ||
+      !allowedPersonsPerRoom ||
+      !guests ||
+      !totalAmount
+    ) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: "Missing required fields",
       });
     }
 
     // Validate property exists and get details
     const property = await PropertyCard.findById(propertyId)
-      .populate('detail')
+      .populate("detail")
       .session(session);
 
     if (!property) {
       await session.abortTransaction();
       return res.status(404).json({
         success: false,
-        message: 'Property not found'
+        message: "Property not found",
       });
     }
 
@@ -1376,7 +1532,7 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Property is not available for booking'
+        message: "Property is not available for booking",
       });
     }
 
@@ -1387,11 +1543,11 @@ export const createCheckoutSession = async (req, res) => {
       checkOutDate,
       roomType,
       quantity,
-      'book',
+      "book",
       session
     );
 
-    console.log(roomAvailability, "roomAvailability")
+    console.log(roomAvailability, "roomAvailability");
 
     // Validate user exists
     const existingUser = await User.findById(userId).session(session);
@@ -1399,7 +1555,7 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
@@ -1411,11 +1567,10 @@ export const createCheckoutSession = async (req, res) => {
     if (email) updateData.email = email;
 
     if (Object.keys(updateData).length > 0) {
-      await User.findByIdAndUpdate(
-        userId,
-        updateData,
-        { session, runValidators: true }
-      );
+      await User.findByIdAndUpdate(userId, updateData, {
+        session,
+        runValidators: true,
+      });
 
       // Update existingUser object with new data for use in response
       Object.assign(existingUser, updateData);
@@ -1431,7 +1586,7 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Check-in date cannot be in the past'
+        message: "Check-in date cannot be in the past",
       });
     }
 
@@ -1439,19 +1594,20 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Check-out date must be after check-in date'
+        message: "Check-out date must be after check-in date",
       });
     }
 
     // Validate guest capacity
-    const totalGuests = guests.adults + (guests.children || 0) + (guests.infants || 0);
-    const maxCapacity = (allowedPersonsPerRoom * quantity) + extraPersons;
+    const totalGuests =
+      guests.adults + (guests.children || 0) + (guests.infants || 0);
+    const maxCapacity = allowedPersonsPerRoom * quantity + extraPersons;
 
     if (totalGuests > maxCapacity) {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: `Too many guests. Maximum capacity: ${maxCapacity}, Requested: ${totalGuests}`
+        message: `Too many guests. Maximum capacity: ${maxCapacity}, Requested: ${totalGuests}`,
       });
     }
 
@@ -1460,7 +1616,7 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: 'Pets are not allowed in this property'
+        message: "Pets are not allowed in this property",
       });
     }
 
@@ -1468,7 +1624,7 @@ export const createCheckoutSession = async (req, res) => {
       await session.abortTransaction();
       return res.status(400).json({
         success: false,
-        message: `Too many pets. Maximum allowed: ${roomAvailability.propertyDetail.allowedPets}, Requested: ${pets}`
+        message: `Too many pets. Maximum allowed: ${roomAvailability.propertyDetail.allowedPets}, Requested: ${pets}`,
       });
     }
 
@@ -1476,13 +1632,15 @@ export const createCheckoutSession = async (req, res) => {
     const existingUserBookings = await Booked.find({
       property: propertyId,
       userId: userId,
-      bookingStatus: { $in: ['pending', 'confirmed', 'completed'] }
+      bookingStatus: { $in: ["pending", "confirmed", "completed"] },
     }).session(session);
 
     // Check for exact same dates by same user
-    const duplicateBooking = existingUserBookings.find(booking => {
-      return booking.checkInDate.getTime() === checkIn.getTime() &&
-        booking.checkOutDate.getTime() === checkOut.getTime();
+    const duplicateBooking = existingUserBookings.find((booking) => {
+      return (
+        booking.checkInDate.getTime() === checkIn.getTime() &&
+        booking.checkOutDate.getTime() === checkOut.getTime()
+      );
     });
 
     // NEW LOGIC: Only prevent duplicate booking if no rooms are available
@@ -1493,40 +1651,48 @@ export const createCheckoutSession = async (req, res) => {
         userId: userId,
         checkInDate: checkIn,
         checkOutDate: checkOut,
-        bookingStatus: { $in: ['pending', 'confirmed', 'completed'] }
+        bookingStatus: { $in: ["pending", "confirmed", "completed"] },
       }).session(session);
 
       // Calculate total rooms this user has booked for these exact dates
-      const userRoomsForSameDates = sameUserSameDateBookings.reduce((total, booking) => {
-        return total + (booking.roomDetails?.quantity || 1);
-      }, 0);
+      const userRoomsForSameDates = sameUserSameDateBookings.reduce(
+        (total, booking) => {
+          return total + (booking.roomDetails?.quantity || 1);
+        },
+        0
+      );
 
       // Check if adding more rooms would exceed availability
       const totalRoomsAfterBooking = userRoomsForSameDates + quantity;
-      const availableRoomsAfterExisting = roomAvailability.availableRooms + userRoomsForSameDates;
+      const availableRoomsAfterExisting =
+        roomAvailability.availableRooms + userRoomsForSameDates;
 
       if (totalRoomsAfterBooking > availableRoomsAfterExisting) {
         await session.abortTransaction();
         return res.status(400).json({
           success: false,
-          message: `You already have a booking for this property on the same dates. No additional rooms available for these dates. Available: ${availableRoomsAfterExisting - userRoomsForSameDates}, Requested: ${quantity}`,
+          message: `You already have a booking for this property on the same dates. No additional rooms available for these dates. Available: ${
+            availableRoomsAfterExisting - userRoomsForSameDates
+          }, Requested: ${quantity}`,
           details: {
             userCurrentRooms: userRoomsForSameDates,
             requestedRooms: quantity,
             availableRooms: availableRoomsAfterExisting - userRoomsForSameDates,
-            totalPropertyRooms: roomAvailability.totalRooms
-          }
+            totalPropertyRooms: roomAvailability.totalRooms,
+          },
         });
       }
     }
 
     // Check for consecutive dates (add-on booking)
-    const consecutiveBooking = existingUserBookings.find(booking => {
+    const consecutiveBooking = existingUserBookings.find((booking) => {
       const existingCheckOut = new Date(booking.checkOutDate);
       const existingCheckIn = new Date(booking.checkInDate);
 
-      return existingCheckOut.getTime() === checkIn.getTime() ||
-        checkOut.getTime() === existingCheckIn.getTime();
+      return (
+        existingCheckOut.getTime() === checkIn.getTime() ||
+        checkOut.getTime() === existingCheckIn.getTime()
+      );
     });
 
     let isExtension = false;
@@ -1546,13 +1712,19 @@ export const createCheckoutSession = async (req, res) => {
     const paymentId = `PAY-${timestamp}-${userSuffix}-${randomSuffix}`;
 
     let savedBooking;
-    let bookingAction = 'created';
+    let bookingAction = "created";
 
     if (isExtension && originalBooking && !duplicateBooking) {
       // Extend existing booking
-      const newCheckIn = new Date(Math.min(originalBooking.checkInDate.getTime(), checkIn.getTime()));
-      const newCheckOut = new Date(Math.max(originalBooking.checkOutDate.getTime(), checkOut.getTime()));
-      const newTotalStay = Math.ceil((newCheckOut - newCheckIn) / (1000 * 60 * 60 * 24));
+      const newCheckIn = new Date(
+        Math.min(originalBooking.checkInDate.getTime(), checkIn.getTime())
+      );
+      const newCheckOut = new Date(
+        Math.max(originalBooking.checkOutDate.getTime(), checkOut.getTime())
+      );
+      const newTotalStay = Math.ceil(
+        (newCheckOut - newCheckIn) / (1000 * 60 * 60 * 24)
+      );
 
       // Update existing booking
       originalBooking.checkInDate = newCheckIn;
@@ -1589,8 +1761,7 @@ export const createCheckoutSession = async (req, res) => {
       }
 
       savedBooking = await originalBooking.save({ session });
-      bookingAction = 'extended';
-
+      bookingAction = "extended";
     } else {
       // Create new booking (including additional rooms for same dates)
       const booking = new Booked({
@@ -1609,20 +1780,20 @@ export const createCheckoutSession = async (req, res) => {
           smokingRoomCharge,
           isPetFriendly,
           pets,
-          petFeePerPet
+          petFeePerPet,
         },
         guests: {
           adults: guests.adults,
           children: guests.children || 0,
-          infants: guests.infants || 0
+          infants: guests.infants || 0,
         },
         specialRequest,
         totalAmount,
-        bookingStatus: 'pending'
+        bookingStatus: "pending",
       });
 
       savedBooking = await booking.save({ session });
-      bookingAction = duplicateBooking ? 'additional_rooms' : 'created';
+      bookingAction = duplicateBooking ? "additional_rooms" : "created";
     }
 
     // Create order
@@ -1630,57 +1801,78 @@ export const createCheckoutSession = async (req, res) => {
       orderId: orderId,
       property: propertyId,
       customer: {
-        name: `${firstname || existingUser.firstname} ${lastname || existingUser.lastname}`,
+        name: `${firstname || existingUser.firstname} ${
+          lastname || existingUser.lastname
+        }`,
         email: email || existingUser.email,
-        phone: phone || existingUser.mobile
+        phone: phone || existingUser.mobile,
       },
       booking: {
         checkIn: savedBooking.checkInDate,
         checkOut: savedBooking.checkOutDate,
-        guests: savedBooking.guests.adults + savedBooking.guests.children + savedBooking.guests.infants,
+        guests:
+          savedBooking.guests.adults +
+          savedBooking.guests.children +
+          savedBooking.guests.infants,
         nights: savedBooking.totalStay,
         rooms: savedBooking.roomDetails.quantity,
         roomType: savedBooking.roomDetails.roomType,
-        specialRequest: savedBooking.specialRequest
+        specialRequest: savedBooking.specialRequest,
       },
       payment: {
         amount: totalAmount * 100,
         currency,
-        stripePaymentIntentId: '',
-        stripePaymentStatus: 'pending'
+        stripePaymentIntentId: "",
+        stripePaymentStatus: "pending",
       },
       bookingId: savedBooking._id,
-      notes: isExtension ? `Extension payment for existing booking` : (duplicateBooking ? 'Additional rooms for same dates' : ''),
+      notes: isExtension
+        ? `Extension payment for existing booking`
+        : duplicateBooking
+        ? "Additional rooms for same dates"
+        : "",
       metadata: {
         isExtension: isExtension.toString(),
-        isAdditionalRooms: duplicateBooking ? 'true' : 'false',
-        originalBookingId: originalBooking?._id?.toString() || '',
-        bookingAction: bookingAction
-      }
+        isAdditionalRooms: duplicateBooking ? "true" : "false",
+        originalBookingId: originalBooking?._id?.toString() || "",
+        bookingAction: bookingAction,
+      },
     });
 
     const savedOrder = await order.save({ session });
 
     // Define the base URL for your frontend
-    const baseUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const baseUrl = process.env.CLIENT_URL || "http://localhost:3000";
 
     // Create detailed line item description
-    const lineItemDescription = `${totalStay} night(s) stay - ${quantity} ${roomType} room(s) - ${guests.adults} adults, ${guests.children || 0} children${pets > 0 ? `, ${pets} pet(s)` : ''}${extraPersons > 0 ? `, ${extraPersons} extra person(s)` : ''}${isSmokingAllowed ? ', smoking allowed' : ''}`;
+    const lineItemDescription = `${totalStay} night(s) stay - ${quantity} ${roomType} room(s) - ${
+      guests.adults
+    } adults, ${guests.children || 0} children${
+      pets > 0 ? `, ${pets} pet(s)` : ""
+    }${extraPersons > 0 ? `, ${extraPersons} extra person(s)` : ""}${
+      isSmokingAllowed ? ", smoking allowed" : ""
+    }`;
 
     // Create Stripe Checkout Session
     const checkoutSession = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
+      payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
             currency: currency,
             product_data: {
-              name: `${property.name} ${isExtension ? '(Extension)' : duplicateBooking ? '(Additional Rooms)' : ''}`,
+              name: `${property.name} ${
+                isExtension
+                  ? "(Extension)"
+                  : duplicateBooking
+                  ? "(Additional Rooms)"
+                  : ""
+              }`,
               description: isExtension
                 ? `Extension: ${lineItemDescription}`
                 : duplicateBooking
-                  ? `Additional Rooms: ${lineItemDescription}`
-                  : lineItemDescription,
+                ? `Additional Rooms: ${lineItemDescription}`
+                : lineItemDescription,
               images: property.image ? [property.image] : [],
             },
             unit_amount: Math.floor(totalAmount) * 100,
@@ -1688,7 +1880,7 @@ export const createCheckoutSession = async (req, res) => {
           quantity: 1,
         },
       ],
-      mode: 'payment',
+      mode: "payment",
       success_url: `${baseUrl}/payment-success`,
       cancel_url: `${baseUrl}`,
       metadata: {
@@ -1698,16 +1890,18 @@ export const createCheckoutSession = async (req, res) => {
         userId: userId,
         customOrderId: orderId,
         isExtension: isExtension.toString(),
-        isAdditionalRooms: duplicateBooking ? 'true' : 'false',
+        isAdditionalRooms: duplicateBooking ? "true" : "false",
         bookingAction: bookingAction,
         roomType: roomType,
         roomQuantity: quantity.toString(),
         userEmail: email || existingUser.email,
-        userName: `${firstname || existingUser.firstname} ${lastname || existingUser.lastname}`,
-        userPhone: phone || existingUser.mobile
+        userName: `${firstname || existingUser.firstname} ${
+          lastname || existingUser.lastname
+        }`,
+        userPhone: phone || existingUser.mobile,
       },
       customer_email: email || existingUser.email,
-      billing_address_collection: 'required',
+      billing_address_collection: "required",
       phone_number_collection: {
         enabled: true,
       },
@@ -1717,11 +1911,17 @@ export const createCheckoutSession = async (req, res) => {
       },
       custom_text: {
         submit: {
-          message: `Complete your ${isExtension ? 'extension' : duplicateBooking ? 'additional room' : 'booking'} payment securely.`
-        }
+          message: `Complete your ${
+            isExtension
+              ? "extension"
+              : duplicateBooking
+              ? "additional room"
+              : "booking"
+          } payment securely.`,
+        },
       },
-      expires_at: Math.floor(Date.now() / 1000) + (24 * 60 * 60),
-      locale: 'auto',
+      expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+      locale: "auto",
       payment_intent_data: {
         metadata: {
           orderId: savedOrder._id.toString(),
@@ -1730,15 +1930,17 @@ export const createCheckoutSession = async (req, res) => {
           userId: userId,
           customOrderId: orderId,
           isExtension: isExtension.toString(),
-          isAdditionalRooms: duplicateBooking ? 'true' : 'false',
+          isAdditionalRooms: duplicateBooking ? "true" : "false",
           bookingAction: bookingAction,
           roomType: roomType,
           roomQuantity: quantity.toString(),
           userEmail: email || existingUser.email,
-          userName: `${firstname || existingUser.firstname} ${lastname || existingUser.lastname}`,
-          userPhone: phone || existingUser.mobile
-        }
-      }
+          userName: `${firstname || existingUser.firstname} ${
+            lastname || existingUser.lastname
+          }`,
+          userPhone: phone || existingUser.mobile,
+        },
+      },
     });
 
     // Create payment record
@@ -1748,13 +1950,13 @@ export const createCheckoutSession = async (req, res) => {
       stripe: {
         paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
         clientSecret: checkoutSession.id,
-        status: 'requires_payment_method'
+        status: "requires_payment_method",
       },
       amount: Math.floor(totalAmount) * 100,
       currency,
       netAmount: Math.floor(totalAmount) * 100,
-      status: 'pending',
-      bookingId: savedBooking._id
+      status: "pending",
+      bookingId: savedBooking._id,
     });
 
     await payment.save({ session });
@@ -1762,12 +1964,13 @@ export const createCheckoutSession = async (req, res) => {
     // Update booking and order with session info
     savedBooking.payment = {
       paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
-      paymentStatus: 'pending'
+      paymentStatus: "pending",
     };
 
     await savedBooking.save({ session });
 
-    savedOrder.payment.stripePaymentIntentId = checkoutSession.payment_intent || checkoutSession.id;
+    savedOrder.payment.stripePaymentIntentId =
+      checkoutSession.payment_intent || checkoutSession.id;
     await savedOrder.save({ session });
 
     await session.commitTransaction();
@@ -1786,12 +1989,14 @@ export const createCheckoutSession = async (req, res) => {
       roomAvailability: {
         availableRooms: roomAvailability.availableRooms,
         totalRooms: roomAvailability.totalRooms,
-        bookedRooms: roomAvailability.roomsBookedInPeriod
+        bookedRooms: roomAvailability.roomsBookedInPeriod,
       },
       redirectUrls: {
         success: `${baseUrl}/booking-success?session_id=${checkoutSession.id}&action=${bookingAction}&booking_id=${savedBooking._id}&order_id=${savedOrder._id}`,
         cancel: `${baseUrl}/booking-cancel?session_id=${checkoutSession.id}&action=${bookingAction}&booking_id=${savedBooking._id}&property_id=${propertyId}`,
-        return: `${baseUrl}/confirm?property_id=${propertyId}&check_in=${checkInDate}&check_out=${checkOutDate}&guests=${JSON.stringify(guests)}&rooms=${quantity}&room_type=${roomType}`
+        return: `${baseUrl}/confirm?property_id=${propertyId}&check_in=${checkInDate}&check_out=${checkOutDate}&guests=${JSON.stringify(
+          guests
+        )}&rooms=${quantity}&room_type=${roomType}`,
       },
       bookingDetails: {
         checkInDate: savedBooking.checkInDate,
@@ -1800,64 +2005,84 @@ export const createCheckoutSession = async (req, res) => {
         totalAmount: savedBooking.totalAmount,
         currentPaymentAmount: Math.floor(totalAmount),
         roomDetails: savedBooking.roomDetails,
-        guests: savedBooking.guests
-      }
+        guests: savedBooking.guests,
+      },
     });
-
   } catch (error) {
     await session.abortTransaction();
-    console.error('Checkout session creation error:', error);
+    console.error("Checkout session creation error:", error);
 
     // Handle specific errors
-    if (error.message.includes('Not enough rooms available') ||
-      error.message.includes('Too many guests') ||
-      error.message.includes('Pets are not allowed') ||
-      error.message.includes('Too many pets') ||
-      error.message.includes('You already have a booking for this property on the same dates')) {
+    if (
+      error.message.includes("Not enough rooms available") ||
+      error.message.includes("Too many guests") ||
+      error.message.includes("Pets are not allowed") ||
+      error.message.includes("Too many pets") ||
+      error.message.includes(
+        "You already have a booking for this property on the same dates"
+      )
+    ) {
       return res.status(400).json({
         success: false,
         message: error.message,
-        redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
+        redirectUrl: `${
+          process.env.CLIENT_URL || "http://localhost:3000"
+        }/confirm`,
       });
     }
 
     if (error.code === 11000) {
-      console.error('Duplicate key error details:', {
+      console.error("Duplicate key error details:", {
         keyPattern: error.keyPattern,
         keyValue: error.keyValue,
-        message: error.message
+        message: error.message,
       });
 
       return res.status(400).json({
         success: false,
-        message: 'Booking conflict detected. Please try again.',
-        redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
+        message: "Booking conflict detected. Please try again.",
+        redirectUrl: `${
+          process.env.CLIENT_URL || "http://localhost:3000"
+        }/confirm`,
       });
     }
 
     // Handle Stripe errors
-    if (error.type === 'StripeCardError' || error.type === 'StripeInvalidRequestError') {
+    if (
+      error.type === "StripeCardError" ||
+      error.type === "StripeInvalidRequestError"
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Payment processing error: ' + error.message,
-        redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
+        message: "Payment processing error: " + error.message,
+        redirectUrl: `${
+          process.env.CLIENT_URL || "http://localhost:3000"
+        }/confirm`,
       });
     }
 
     res.status(500).json({
       success: false,
-      message: 'Failed to create checkout session',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
-      redirectUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/confirm`
+      message: "Failed to create checkout session",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
+      redirectUrl: `${
+        process.env.CLIENT_URL || "http://localhost:3000"
+      }/confirm`,
     });
   } finally {
     session.endSession();
   }
 };
 
-
 // Utility function to retry operations with exponential backoff
-const retryWithBackoff = async (operation, maxRetries = 3, baseDelay = 1000) => {
+const retryWithBackoff = async (
+  operation,
+  maxRetries = 3,
+  baseDelay = 1000
+) => {
   let lastError;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -1867,10 +2092,11 @@ const retryWithBackoff = async (operation, maxRetries = 3, baseDelay = 1000) => 
       lastError = error;
 
       // Check if this is a retryable error
-      const isRetryable = error.code === 112 || // WriteConflict
+      const isRetryable =
+        error.code === 112 || // WriteConflict
         error.code === 11000 || // DuplicateKey
-        error.errorLabels?.includes('TransientTransactionError') ||
-        error.message?.includes('Write conflict');
+        error.errorLabels?.includes("TransientTransactionError") ||
+        error.message?.includes("Write conflict");
 
       if (!isRetryable || attempt === maxRetries - 1) {
         throw error;
@@ -1878,8 +2104,12 @@ const retryWithBackoff = async (operation, maxRetries = 3, baseDelay = 1000) => 
 
       // Exponential backoff with jitter
       const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
-      console.log(`Retrying operation after ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      console.log(
+        `Retrying operation after ${delay}ms (attempt ${
+          attempt + 1
+        }/${maxRetries})`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
@@ -1887,37 +2117,56 @@ const retryWithBackoff = async (operation, maxRetries = 3, baseDelay = 1000) => 
 };
 
 // Create a simple webhook event tracking schema (you might want to create a separate model file)
-const WebhookEvent = mongoose.model('WebhookEvent', new mongoose.Schema({
-  eventId: { type: String, required: true, unique: true },
-  eventType: { type: String, required: true },
-  processedAt: { type: Date, default: Date.now },
-  bookingId: String,
-  orderId: String,
-  status: { type: String, enum: ['processed', 'failed'], default: 'processed' },
-  retryCount: { type: Number, default: 0 },
-  errorMessage: String
-}, {
-  timestamps: true,
-  expires: '30d' // Auto-delete after 30 days
-}));
+const WebhookEvent = mongoose.model(
+  "WebhookEvent",
+  new mongoose.Schema(
+    {
+      eventId: { type: String, required: true, unique: true },
+      eventType: { type: String, required: true },
+      processedAt: { type: Date, default: Date.now },
+      bookingId: String,
+      orderId: String,
+      status: {
+        type: String,
+        enum: ["processed", "failed"],
+        default: "processed",
+      },
+      retryCount: { type: Number, default: 0 },
+      errorMessage: String,
+    },
+    {
+      timestamps: true,
+      expires: "30d", // Auto-delete after 30 days
+    }
+  )
+);
 
 // Utility function to check if event was already processed
 const checkEventProcessed = async (eventId, eventType) => {
   try {
     const existingEvent = await WebhookEvent.findOne({ eventId });
     if (existingEvent) {
-      console.log(`Event ${eventId} already processed at ${existingEvent.processedAt}`);
+      console.log(
+        `Event ${eventId} already processed at ${existingEvent.processedAt}`
+      );
       return true;
     }
     return false;
   } catch (error) {
-    console.error('Error checking event processing status:', error);
+    console.error("Error checking event processing status:", error);
     return false;
   }
 };
 
 // Utility function to mark event as processed
-const markEventProcessed = async (eventId, eventType, bookingId, orderId, status = 'processed', errorMessage = null) => {
+const markEventProcessed = async (
+  eventId,
+  eventType,
+  bookingId,
+  orderId,
+  status = "processed",
+  errorMessage = null
+) => {
   try {
     await WebhookEvent.findOneAndUpdate(
       { eventId },
@@ -1928,120 +2177,237 @@ const markEventProcessed = async (eventId, eventType, bookingId, orderId, status
         orderId,
         status,
         errorMessage,
-        processedAt: new Date()
+        processedAt: new Date(),
       },
       { upsert: true, new: true }
     );
   } catch (error) {
-    console.error('Error marking event as processed:', error);
+    console.error("Error marking event as processed:", error);
     // Don't throw here as this is not critical
   }
 };
 
+// export const handleStripeWebhook = async (req, res) => {
+//   console.log("Running Stripe Webhook Event");
+
+//   const sig = req.headers["stripe-signature"];
+//   let event;
+
+//   try {
+//     event = stripe.webhooks.constructEvent(
+//       req.body,
+//       sig,
+//       process.env.STRIPE_WEBHOOK_SECRET
+//     );
+//   } catch (err) {
+//     console.error(`Webhook signature verification failed:`, err.message);
+//     return res.status(400).send(`Webhook Error: ${err.message}`);
+//   }
+
+//   console.log(`Processing event type: ${event.type} with ID: ${event.id}`);
+
+//   let bookingId = null;
+//   let orderId = null;
+
+//   try {
+//     // Extract metadata for tracking
+//     const eventData = event.data.object;
+//     if (eventData.metadata) {
+//       bookingId = eventData.metadata.bookingId;
+//       orderId = eventData.metadata.orderId;
+//     }
+
+//     // Check if this event was already processed (idempotency check)
+//     const alreadyProcessed = await checkEventProcessed(event.id, event.type);
+//     if (alreadyProcessed) {
+//       console.log(`Event ${event.id} already processed, skipping`);
+//       return res.json({ received: true, status: "already_processed" });
+//     }
+
+//     // Wrap the entire webhook processing in retry logic
+//     await retryWithBackoff(async () => {
+//       switch (event.type) {
+//         case "checkout.session.completed":
+//           const session = event.data.object;
+//           console.log("Checkout session completed:", session.id);
+//           await handleSuccessfulPayment(session);
+//           break;
+
+//         case "payment_intent.succeeded":
+//           const paymentIntent = event.data.object;
+//           console.log("Payment intent succeeded:", paymentIntent.id);
+//           await handlePaymentIntentSucceeded(paymentIntent);
+//           break;
+
+//         case "payment_intent.payment_failed":
+//           const failedPayment = event.data.object;
+//           console.log("Payment intent failed:", failedPayment.id);
+//           await handlePaymentFailed(failedPayment);
+//           break;
+
+//         case "payment_intent.canceled":
+//           const canceledPayment = event.data.object;
+//           console.log("Payment intent canceled:", canceledPayment.id);
+//           await handlePaymentCanceled(canceledPayment);
+//           break;
+
+//         default:
+//           console.log(`Unhandled event type: ${event.type}`);
+//       }
+//     });
+
+//     // Mark event as successfully processed
+//     await markEventProcessed(
+//       event.id,
+//       event.type,
+//       bookingId,
+//       orderId,
+//       "processed"
+//     );
+
+//     console.log(
+//       `Successfully processed webhook event ${event.id} of type ${event.type}`
+//     );
+//     res.json({ received: true, status: "processed" });
+//   } catch (error) {
+//     console.error("Error processing webhook after retries:", error);
+
+//     // Mark event as failed for tracking
+//     await markEventProcessed(
+//       event.id,
+//       event.type,
+//       bookingId,
+//       orderId,
+//       "failed",
+//       error.message
+//     );
+
+//     // Return 500 for retryable errors so Stripe will retry
+//     const isRetryable =
+//       error.code === 112 ||
+//       error.code === 11000 ||
+//       error.errorLabels?.includes("TransientTransactionError") ||
+//       error.message?.includes("Write conflict") ||
+//       error.message?.includes("Connection") ||
+//       error.message?.includes("timeout");
+
+//     if (isRetryable) {
+//       console.log(`Retryable error for event ${event.id}: ${error.message}`);
+//       res.status(500).json({
+//         error: "Webhook processing failed - retryable error",
+//         eventId: event.id,
+//         code: error.code,
+//         message: error.message,
+//       });
+//     } else {
+//       // Return 400 for non-retryable errors
+//       console.log(
+//         `Non-retryable error for event ${event.id}: ${error.message}`
+//       );
+//       res.status(400).json({
+//         error: "Webhook processing failed - non-retryable error",
+//         eventId: event.id,
+//         code: error.code,
+//         message: error.message,
+//       });
+//     }
+//   }
+// };
+
+
 export const handleStripeWebhook = async (req, res) => {
   console.log("Running Stripe Webhook Event");
 
-  const sig = req.headers['stripe-signature'];
+  const sig = req.headers["stripe-signature"];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
-    console.error(`Webhook signature verification failed:`, err.message);
+    console.error("Webhook signature verification failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  console.log(`Processing event type: ${event.type} with ID: ${event.id}`);
+  console.log(`Received event ${event.id} → ${event.type}`);
 
-  let bookingId = null;
-  let orderId = null;
+  // ✅ RESPOND TO STRIPE IMMEDIATELY
+  res.status(200).json({ received: true });
 
-  try {
-    // Extract metadata for tracking
-    const eventData = event.data.object;
-    if (eventData.metadata) {
-      bookingId = eventData.metadata.bookingId;
-      orderId = eventData.metadata.orderId;
-    }
+  // ⬇️ EVERYTHING BELOW RUNS ASYNC (NON-BLOCKING)
+  (async () => {
+    let bookingId = null;
+    let orderId = null;
 
-    // Check if this event was already processed (idempotency check)
-    const alreadyProcessed = await checkEventProcessed(event.id, event.type);
-    if (alreadyProcessed) {
-      console.log(`Event ${event.id} already processed, skipping`);
-      return res.json({ received: true, status: 'already_processed' });
-    }
+    try {
+      const eventData = event.data.object;
 
-    // Wrap the entire webhook processing in retry logic
-    await retryWithBackoff(async () => {
-      switch (event.type) {
-        case 'checkout.session.completed':
-          const session = event.data.object;
-          console.log('Checkout session completed:', session.id);
-          await handleSuccessfulPayment(session);
-          break;
-
-        case 'payment_intent.succeeded':
-          const paymentIntent = event.data.object;
-          console.log('Payment intent succeeded:', paymentIntent.id);
-          await handlePaymentIntentSucceeded(paymentIntent);
-          break;
-
-        case 'payment_intent.payment_failed':
-          const failedPayment = event.data.object;
-          console.log('Payment intent failed:', failedPayment.id);
-          await handlePaymentFailed(failedPayment);
-          break;
-
-        case 'payment_intent.canceled':
-          const canceledPayment = event.data.object;
-          console.log('Payment intent canceled:', canceledPayment.id);
-          await handlePaymentCanceled(canceledPayment);
-          break;
-
-        default:
-          console.log(`Unhandled event type: ${event.type}`);
+      if (eventData?.metadata) {
+        bookingId = eventData.metadata.bookingId;
+        orderId = eventData.metadata.orderId;
       }
-    });
 
-    // Mark event as successfully processed
-    await markEventProcessed(event.id, event.type, bookingId, orderId, 'processed');
+      // 🔐 Idempotency check
+      const alreadyProcessed = await checkEventProcessed(
+        event.id,
+        event.type
+      );
 
-    console.log(`Successfully processed webhook event ${event.id} of type ${event.type}`);
-    res.json({ received: true, status: 'processed' });
+      if (alreadyProcessed) {
+        console.log(`Event ${event.id} already processed`);
+        return;
+      }
 
-  } catch (error) {
-    console.error('Error processing webhook after retries:', error);
+      await retryWithBackoff(async () => {
+        switch (event.type) {
 
-    // Mark event as failed for tracking
-    await markEventProcessed(event.id, event.type, bookingId, orderId, 'failed', error.message);
+          case "checkout.session.completed":
+            await handleSuccessfulPayment(eventData);
+            break;
 
-    // Return 500 for retryable errors so Stripe will retry
-    const isRetryable = error.code === 112 ||
-      error.code === 11000 ||
-      error.errorLabels?.includes('TransientTransactionError') ||
-      error.message?.includes('Write conflict') ||
-      error.message?.includes('Connection') ||
-      error.message?.includes('timeout');
+          case "payment_intent.succeeded":
+            await handlePaymentIntentSucceeded(eventData);
+            break;
 
-    if (isRetryable) {
-      console.log(`Retryable error for event ${event.id}: ${error.message}`);
-      res.status(500).json({
-        error: 'Webhook processing failed - retryable error',
-        eventId: event.id,
-        code: error.code,
-        message: error.message
+          case "payment_intent.payment_failed":
+            await handlePaymentFailed(eventData);
+            break;
+
+          case "payment_intent.canceled":
+            await handlePaymentCanceled(eventData);
+            break;
+
+          default:
+            console.log(`Unhandled event type: ${event.type}`);
+            return;
+        }
       });
-    } else {
-      // Return 400 for non-retryable errors
-      console.log(`Non-retryable error for event ${event.id}: ${error.message}`);
-      res.status(400).json({
-        error: 'Webhook processing failed - non-retryable error',
-        eventId: event.id,
-        code: error.code,
-        message: error.message
-      });
+
+      await markEventProcessed(
+        event.id,
+        event.type,
+        bookingId,
+        orderId,
+        "processed"
+      );
+
+      console.log(`✅ Webhook ${event.id} processed successfully`);
+    } catch (error) {
+      console.error("❌ Webhook async processing failed:", error);
+
+      await markEventProcessed(
+        event.id,
+        event.type,
+        bookingId,
+        orderId,
+        "failed",
+        error.message
+      );
     }
-  }
+  })();
 };
 
 
@@ -2050,21 +2416,21 @@ export const handleStripeWebhook = async (req, res) => {
 const getBookingDetail = async (bookingId, session = null) => {
   try {
     const booking = await Booked.findById(bookingId)
-      .populate('property')
-      .populate('userId')
+      .populate("property")
+      .populate("userId")
       .session(session);
 
     if (!booking) {
-      throw new Error('Booking not found');
+      throw new Error("Booking not found");
     }
 
     return {
       booking,
       property: booking.property,
-      user: booking.userId
+      user: booking.userId,
     };
   } catch (error) {
-    console.error('Error fetching booking details:', error);
+    console.error("Error fetching booking details:", error);
     throw error;
   }
 };
@@ -2080,64 +2446,87 @@ const sendBookingEmails = async (status, bookingId, paymentDetails = {}) => {
       checkOutDate: booking.checkOutDate,
       roomType: booking.roomDetails.roomType,
       quantity: booking.roomDetails.quantity,
-      totalAmount: booking.totalAmount
+      totalAmount: booking.totalAmount,
     };
 
     const propertyDetails = {
-      name: property.name
+      name: property.name,
     };
 
     const customerDetails = {
       name: `${user.firstname} ${user.lastname}`,
       email: user.email,
-      phone: user.mobile
+      phone: user.mobile,
     };
 
     // Send email to customer
-    const customerTemplate = getCustomerEmailTemplate(status, bookingDetails, propertyDetails);
+    const customerTemplate = getCustomerEmailTemplate(
+      status,
+      bookingDetails,
+      propertyDetails
+    );
     if (user.email) {
       await sendEmail({
         to: user.email,
         subject: customerTemplate.subject,
-        html: customerTemplate.html
+        html: customerTemplate.html,
       });
-      console.log(`Customer email sent to ${user.email} for booking ${bookingId} - Status: ${status}`);
+      console.log(
+        `Customer email sent to ${user.email} for booking ${bookingId} - Status: ${status}`
+      );
     }
 
     // Send email to owner
-    const ownerTemplate = getOwnerEmailTemplate(status, bookingDetails, propertyDetails, customerDetails);
+    const ownerTemplate = getOwnerEmailTemplate(
+      status,
+      bookingDetails,
+      propertyDetails,
+      customerDetails
+    );
     await sendEmail({
-      to: 'plainsmotorinnn@gmail.com',
+      to: "plainsmotorinnn@gmail.com",
       subject: ownerTemplate.subject,
-      html: ownerTemplate.html
+      html: ownerTemplate.html,
     });
-    console.log(`Owner email sent for booking ${bookingId} - Status: ${status}`);
-
+    console.log(
+      `Owner email sent for booking ${bookingId} - Status: ${status}`
+    );
   } catch (error) {
-    console.error('Error sending booking emails:', error);
+    console.error("Error sending booking emails:", error);
     // Don't throw error to prevent webhook from failing
   }
 };
 
-
-
-
-export const getCustomerEmailTemplate = (status, bookingDetails, propertyDetails) => {
-  const { customerName, bookingId, checkInDate, checkOutDate, roomType, quantity, totalAmount, guests, specialRequest } = bookingDetails;
+export const getCustomerEmailTemplate = (
+  status,
+  bookingDetails,
+  propertyDetails
+) => {
+  const {
+    customerName,
+    bookingId,
+    checkInDate,
+    checkOutDate,
+    roomType,
+    quantity,
+    totalAmount,
+    guests,
+    specialRequest,
+  } = bookingDetails;
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    return new Date(date).toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     });
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD'
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: "CAD",
     }).format(amount);
   };
 
@@ -2155,7 +2544,9 @@ Booking Details:
 - Check-out: ${formatDate(checkOutDate)}
 - Room Type: ${roomType}
 - Number of Rooms: ${quantity}
-- Guests: ${guests?.adults || 0} adults, ${guests?.children || 0} children, ${guests?.infants || 0} infants
+- Guests: ${guests?.adults || 0} adults, ${guests?.children || 0} children, ${
+        guests?.infants || 0
+      } infants
 - Total Amount: ${formatCurrency(totalAmount)}
 
 We're excited to host you! If you have any questions, please don't hesitate to contact us.
@@ -2201,17 +2592,23 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6;">
                     <span style="color: #6c757d; font-weight: 500;">Property</span>
-                    <span style="color: #333; font-weight: 600;">${propertyDetails.name}</span>
+                    <span style="color: #333; font-weight: 600;">${
+                      propertyDetails.name
+                    }</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6;">
                     <span style="color: #6c757d; font-weight: 500;">Check-in</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkInDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkInDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6;">
                     <span style="color: #6c757d; font-weight: 500;">Check-out</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkOutDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkOutDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6;">
@@ -2226,21 +2623,31 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #dee2e6;">
                     <span style="color: #6c757d; font-weight: 500;">Guests</span>
-                    <span style="color: #333; font-weight: 600;">${guests?.adults || 0} adults, ${guests?.children || 0} children, ${guests?.infants || 0} infants</span>
+                    <span style="color: #333; font-weight: 600;">${
+                      guests?.adults || 0
+                    } adults, ${guests?.children || 0} children, ${
+        guests?.infants || 0
+      } infants</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; background-color: rgba(40, 167, 69, 0.1); margin: 10px -15px -15px; padding: 20px 15px; border-radius: 8px;">
                     <span style="color: #28a745; font-weight: 600; font-size: 16px;">Total Amount</span>
-                    <span style="color: #28a745; font-weight: 700; font-size: 20px;">${formatCurrency(totalAmount)}</span>
+                    <span style="color: #28a745; font-weight: 700; font-size: 20px;">${formatCurrency(
+                      totalAmount
+                    )}</span>
                   </div>
                 </div>
                 
-                ${specialRequest ? `
+                ${
+                  specialRequest
+                    ? `
                   <div style="margin-top: 20px; padding: 15px; background-color: rgba(13, 110, 253, 0.1); border-radius: 8px; border-left: 3px solid #0d6efd;">
                     <h4 style="color: #0d6efd; margin: 0 0 8px; font-size: 14px; font-weight: 600;">Special Request:</h4>
                     <p style="color: #333; margin: 0; font-size: 14px; line-height: 1.5;">${specialRequest}</p>
                   </div>
-                ` : ''}
+                `
+                    : ""
+                }
               </div>
               
               <!-- What's Next Section -->
@@ -2277,7 +2684,7 @@ The Booking Team`,
           </div>
         </body>
         </html>
-      `
+      `,
     },
 
     failed: {
@@ -2338,17 +2745,23 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1c2c2;">
                     <span style="color: #6c757d; font-weight: 500;">Property</span>
-                    <span style="color: #333; font-weight: 600;">${propertyDetails.name}</span>
+                    <span style="color: #333; font-weight: 600;">${
+                      propertyDetails.name
+                    }</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1c2c2;">
                     <span style="color: #6c757d; font-weight: 500;">Check-in</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkInDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkInDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1c2c2;">
                     <span style="color: #6c757d; font-weight: 500;">Check-out</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkOutDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkOutDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f1c2c2;">
@@ -2358,7 +2771,9 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; background-color: rgba(220, 53, 69, 0.1); margin: 10px -15px -15px; padding: 20px 15px; border-radius: 8px;">
                     <span style="color: #dc3545; font-weight: 600; font-size: 16px;">Amount Due</span>
-                    <span style="color: #dc3545; font-weight: 700; font-size: 20px;">${formatCurrency(totalAmount)}</span>
+                    <span style="color: #dc3545; font-weight: 700; font-size: 20px;">${formatCurrency(
+                      totalAmount
+                    )}</span>
                   </div>
                 </div>
               </div>
@@ -2400,7 +2815,7 @@ The Booking Team`,
           </div>
         </body>
         </html>
-      `
+      `,
     },
 
     canceled: {
@@ -2461,17 +2876,23 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f5e6a3;">
                     <span style="color: #6c757d; font-weight: 500;">Property</span>
-                    <span style="color: #333; font-weight: 600;">${propertyDetails.name}</span>
+                    <span style="color: #333; font-weight: 600;">${
+                      propertyDetails.name
+                    }</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f5e6a3;">
                     <span style="color: #6c757d; font-weight: 500;">Check-in</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkInDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkInDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f5e6a3;">
                     <span style="color: #6c757d; font-weight: 500;">Check-out</span>
-                    <span style="color: #333; font-weight: 600;">${formatDate(checkOutDate)}</span>
+                    <span style="color: #333; font-weight: 600;">${formatDate(
+                      checkOutDate
+                    )}</span>
                   </div>
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f5e6a3;">
@@ -2481,7 +2902,9 @@ The Booking Team`,
                   
                   <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; background-color: rgba(255, 193, 7, 0.1); margin: 10px -15px -15px; padding: 20px 15px; border-radius: 8px;">
                     <span style="color: #856404; font-weight: 600; font-size: 16px;">Total Amount</span>
-                    <span style="color: #856404; font-weight: 700; font-size: 20px;">${formatCurrency(totalAmount)}</span>
+                    <span style="color: #856404; font-weight: 700; font-size: 20px;">${formatCurrency(
+                      totalAmount
+                    )}</span>
                   </div>
                 </div>
               </div>
@@ -2518,28 +2941,40 @@ The Booking Team`,
           </div>
         </body>
         </html>
-      `
-    }
+      `,
+    },
   };
 
   return templates[status] || templates.failed;
 };
 
-export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, customerDetails) => {
-  const { bookingId, checkInDate, checkOutDate, roomType, quantity, totalAmount } = bookingDetails;
+export const getOwnerEmailTemplate = (
+  status,
+  bookingDetails,
+  propertyDetails,
+  customerDetails
+) => {
+  const {
+    bookingId,
+    checkInDate,
+    checkOutDate,
+    roomType,
+    quantity,
+    totalAmount,
+  } = bookingDetails;
 
   const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-CA', {
-      style: 'currency',
-      currency: 'CAD'
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency: "CAD",
     }).format(amount);
   };
 
@@ -2558,11 +2993,13 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Email:</strong> ${customerDetails.email}</p>
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
-            <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Room:</strong> ${roomType} (${quantity} room${
+        quantity > 1 ? "s" : ""
+      })</p>
             <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
           </div>
         </div>
-      `
+      `,
     },
 
     failed: {
@@ -2578,12 +3015,14 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Phone:</strong> ${customerDetails.phone}</p>
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
-            <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Room:</strong> ${roomType} (${quantity} room${
+        quantity > 1 ? "s" : ""
+      })</p>
             <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
             <p style="color: #dc3545;"><strong>Status:</strong> Payment failed - booking on hold</p>
           </div>
         </div>
-      `
+      `,
     },
 
     canceled: {
@@ -2600,16 +3039,90 @@ export const getOwnerEmailTemplate = (status, bookingDetails, propertyDetails, c
             <p><strong>Email:</strong> ${customerDetails.email}</p>
             <p><strong>Check-in:</strong> ${formatDate(checkInDate)}</p>
             <p><strong>Check-out:</strong> ${formatDate(checkOutDate)}</p>
-            <p><strong>Room:</strong> ${roomType} (${quantity} room${quantity > 1 ? 's' : ''})</p>
+            <p><strong>Room:</strong> ${roomType} (${quantity} room${
+        quantity > 1 ? "s" : ""
+      })</p>
             <p><strong>Total Amount:</strong> ${formatCurrency(totalAmount)}</p>
             <p style="color: #ffc107;"><strong>Status:</strong> Booking was canceled</p>
           </div>
         </div>
-      `
-    }
+      `,
+    },
   };
 
-  return templates[status] || { subject: "Booking Update", html: "<p>No template available</p>" };
+  return (
+    templates[status] || {
+      subject: "Booking Update",
+      html: "<p>No template available</p>",
+    }
+  );
+};
+
+export const cancelBookingManually = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { bookingId, orderId, propertyId } = req.body;
+
+    if (!bookingId || !orderId) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    await session.withTransaction(async () => {
+      const booking = await Booked.findByIdAndUpdate(
+        bookingId,
+        {
+          bookingStatus: "cancelled",
+          "payment.paymentStatus": "manual_refund_pending",
+        },
+        { new: true, session }
+      );
+
+      if (!booking) throw new Error("Booking not found");
+
+      await Order.findByIdAndUpdate(
+        orderId,
+        {
+          status: "cancelled",
+          "payment.manualRefundStatus": "pending",
+        },
+        { session }
+      );
+
+      await Payment.findOneAndUpdate(
+        { bookingId },
+        {
+          status: "manual_refund_pending",
+        },
+        { session }
+      );
+
+      await updateRoomAvailability(
+        propertyId,
+        booking.checkInDate,
+        booking.checkOutDate,
+        booking.roomDetails.roomType,
+        booking.roomDetails.quantity,
+        "cancel",
+        session
+      );
+    });
+
+    sendBookingEmails("canceled", bookingId).catch(console.error);
+
+    return res.status(200).json({
+      success: true,
+      message: "Booking cancelled. Refund will be handled manually.",
+    });
+
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Cancel failed" });
+  } finally {
+    session.endSession();
+  }
 };
 
 
+
+ 
