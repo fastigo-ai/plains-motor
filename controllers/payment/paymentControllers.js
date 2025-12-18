@@ -1920,7 +1920,6 @@ export const createCheckoutSession = async (req, res) => {
           } payment securely.`,
         },
       },
-      expires_at: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
       locale: "auto",
       payment_intent_data: {
         metadata: {
