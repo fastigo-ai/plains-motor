@@ -5,13 +5,14 @@ import connectDB from './config/db.js';
 import authRoutes from './routes/auth/authRoutes.js';
 import propertyRoutes from './routes/propertyRoutes/propertyRoutes.js';
 import paymentRoutes from './routes/payment/paymentRoutes.js';
+import paymentWebHookRoute from './routes/payment/paymentWebHookRoute.js';
 
 dotenv.config();
 connectDB();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+app.use("/api/webhooks", paymentWebHookRoute);
 app.post('/api/payments/webhook', express.raw({ type: 'application/json' }));
 app.use(cors());
 app.use(express.json());
@@ -19,6 +20,9 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/property', propertyRoutes);
 app.use('/api/payments', paymentRoutes);
+
+
+
 
 app.get('/', (req, res) => {
   res.send('API is working!');

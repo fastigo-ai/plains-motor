@@ -1,9 +1,9 @@
 import express from 'express';
 import {
   createCheckoutSession,
-  handleStripeWebhook,
   getBookingDetails,
-  getUserBookings
+  getUserBookings,
+  cancelBookingManually,
 } from '../../controllers/payment/paymentControllers.js';
 
 const router = express.Router();
@@ -19,8 +19,9 @@ const webhookMiddleware = (req, res, next) => {
 
 // Routes
 router.post('/create-checkout-session', createCheckoutSession);
-router.post('/webhook', handleStripeWebhook);
+// router.post('/webhook', handleStripeWebhook);
 router.get('/booking-details/:sessionId', getBookingDetails);
 router.get('/user-bookings/:userId', getUserBookings);
+router.post('/cancel-booking', cancelBookingManually);
 
-export default router;
+export default router; 
