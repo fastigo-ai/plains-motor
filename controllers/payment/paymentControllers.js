@@ -1920,7 +1920,6 @@ export const createCheckoutSession = async (req, res) => {
           } payment securely.`,
         },
       },
-      
       locale: "auto",
       payment_intent_data: {
         metadata: {
