@@ -91,7 +91,7 @@ const orderSchema = new mongoose.Schema({
     },
     stripePaymentStatus: {
       type: String,
-      enum: ['pending', 'succeeded', 'failed', 'canceled'],
+      enum: ['pending', 'succeeded', 'failed', 'canceled','cod_paid','cod_pending','payment_pending',],
       default: 'pending'
     },
     paymentMethod: {
@@ -103,7 +103,16 @@ const orderSchema = new mongoose.Schema({
   // Order status
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+    enum: [
+      'pending',
+      'paid',
+      'cod_pending',
+      'failed',
+      'refunded',
+      'cancelled',
+      'confirmed',
+      'payment_pending',
+    ],
     default: 'pending'
   },
   

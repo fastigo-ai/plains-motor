@@ -1460,6 +1460,627 @@ export const updateRoomAvailability = async (
 };
 
 // Updated checkout session creation function
+// export const createCheckoutSession = async (req, res) => {
+//   const session = await mongoose.startSession();
+//   session.startTransaction();
+
+//   try {
+//     const {
+//       propertyId,
+//       userId,
+//       checkInDate,
+//       checkOutDate,
+//       totalStay,
+//       roomDetails: {
+//         roomType,
+//         quantity,
+//         allowedPersonsPerRoom,
+//         extraPersons = 0,
+//         extraPersonCharge = 0,
+//         isSmokingAllowed = false,
+//         smokingRoomCharge = 0,
+//         isPetFriendly = false,
+//         pets = 0,
+//         petFeePerPet = 0,
+//       },
+//       guests,
+//       specialRequest = "",
+//       user: {
+//         firstname,
+//         lastname,
+//         phone,
+//         email, // Accept email in the request
+//       },
+//       totalAmount,
+//       currency = "cad",
+//     } = req.body;
+
+//     // Validate required fields
+//     if (
+//       !propertyId ||
+//       !userId ||
+//       !checkInDate ||
+//       !checkOutDate ||
+//       !totalStay ||
+//       !roomType ||
+//       !quantity ||
+//       !allowedPersonsPerRoom ||
+//       !guests ||
+//       !totalAmount
+//     ) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required fields",
+//       });
+//     }
+
+//     // Validate property exists and get details
+//     const property = await PropertyCard.findById(propertyId)
+//       .populate("detail")
+//       .session(session);
+
+//     if (!property) {
+//       await session.abortTransaction();
+//       return res.status(404).json({
+//         success: false,
+//         message: "Property not found",
+//       });
+//     }
+
+//     if (!property.inStock) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Property is not available for booking",
+//       });
+//     }
+
+//     // Validate room availability FIRST
+//     const roomAvailability = await updateRoomAvailability(
+//       propertyId,
+//       checkInDate,
+//       checkOutDate,
+//       roomType,
+//       quantity,
+//       "book",
+//       session
+//     );
+
+//     console.log(roomAvailability, "roomAvailability");
+
+//     // Validate user exists
+//     const existingUser = await User.findById(userId).session(session);
+//     if (!existingUser) {
+//       await session.abortTransaction();
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     // Update user information if provided (including email)
+//     const updateData = {};
+//     if (firstname) updateData.firstname = firstname;
+//     if (lastname) updateData.lastname = lastname;
+//     if (phone) updateData.mobile = phone;
+//     if (email) updateData.email = email;
+
+//     if (Object.keys(updateData).length > 0) {
+//       await User.findByIdAndUpdate(userId, updateData, {
+//         session,
+//         runValidators: true,
+//       });
+
+//       // Update existingUser object with new data for use in response
+//       Object.assign(existingUser, updateData);
+//     }
+
+//     // Validate dates
+//     const checkIn = new Date(checkInDate);
+//     const checkOut = new Date(checkOutDate);
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+
+//     if (checkIn < today) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Check-in date cannot be in the past",
+//       });
+//     }
+
+//     if (checkOut <= checkIn) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Check-out date must be after check-in date",
+//       });
+//     }
+
+//     // Validate guest capacity
+//     const totalGuests =
+//       guests.adults + (guests.children || 0) + (guests.infants || 0);
+//     const maxCapacity = allowedPersonsPerRoom * quantity + extraPersons;
+
+//     if (totalGuests > maxCapacity) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: `Too many guests. Maximum capacity: ${maxCapacity}, Requested: ${totalGuests}`,
+//       });
+//     }
+
+//     // Validate pet policy
+//     if (pets > 0 && !isPetFriendly) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: "Pets are not allowed in this property",
+//       });
+//     }
+
+//     if (pets > roomAvailability.propertyDetail.allowedPets) {
+//       await session.abortTransaction();
+//       return res.status(400).json({
+//         success: false,
+//         message: `Too many pets. Maximum allowed: ${roomAvailability.propertyDetail.allowedPets}, Requested: ${pets}`,
+//       });
+//     }
+
+//     // Check for existing bookings by the same user for the same property
+//     const existingUserBookings = await Booked.find({
+//       property: propertyId,
+//       userId: userId,
+//       bookingStatus: { $in: ["pending", "confirmed", "completed"] },
+//     }).session(session);
+
+//     // Check for exact same dates by same user
+//     const duplicateBooking = existingUserBookings.find((booking) => {
+//       return (
+//         booking.checkInDate.getTime() === checkIn.getTime() &&
+//         booking.checkOutDate.getTime() === checkOut.getTime()
+//       );
+//     });
+
+//     // NEW LOGIC: Only prevent duplicate booking if no rooms are available
+//     if (duplicateBooking) {
+//       // Calculate current room usage for the same dates
+//       const sameUserSameDateBookings = await Booked.find({
+//         property: propertyId,
+//         userId: userId,
+//         checkInDate: checkIn,
+//         checkOutDate: checkOut,
+//         bookingStatus: { $in: ["pending", "confirmed", "completed"] },
+//       }).session(session);
+
+//       // Calculate total rooms this user has booked for these exact dates
+//       const userRoomsForSameDates = sameUserSameDateBookings.reduce(
+//         (total, booking) => {
+//           return total + (booking.roomDetails?.quantity || 1);
+//         },
+//         0
+//       );
+
+//       // Check if adding more rooms would exceed availability
+//       const totalRoomsAfterBooking = userRoomsForSameDates + quantity;
+//       const availableRoomsAfterExisting =
+//         roomAvailability.availableRooms + userRoomsForSameDates;
+
+//       if (totalRoomsAfterBooking > availableRoomsAfterExisting) {
+//         await session.abortTransaction();
+//         return res.status(400).json({
+//           success: false,
+//           message: `You already have a booking for this property on the same dates. No additional rooms available for these dates. Available: ${
+//             availableRoomsAfterExisting - userRoomsForSameDates
+//           }, Requested: ${quantity}`,
+//           details: {
+//             userCurrentRooms: userRoomsForSameDates,
+//             requestedRooms: quantity,
+//             availableRooms: availableRoomsAfterExisting - userRoomsForSameDates,
+//             totalPropertyRooms: roomAvailability.totalRooms,
+//           },
+//         });
+//       }
+//     }
+
+//     // Check for consecutive dates (add-on booking)
+//     const consecutiveBooking = existingUserBookings.find((booking) => {
+//       const existingCheckOut = new Date(booking.checkOutDate);
+//       const existingCheckIn = new Date(booking.checkInDate);
+
+//       return (
+//         existingCheckOut.getTime() === checkIn.getTime() ||
+//         checkOut.getTime() === existingCheckIn.getTime()
+//       );
+//     });
+
+//     let isExtension = false;
+//     let originalBooking = null;
+
+//     if (consecutiveBooking && !duplicateBooking) {
+//       isExtension = true;
+//       originalBooking = consecutiveBooking;
+//     }
+
+//     // Generate unique IDs
+//     const timestamp = Date.now();
+//     const randomSuffix = Math.random().toString(36).substr(2, 9);
+//     const userSuffix = userId.toString().substr(-4);
+
+//     const orderId = `ORDER-${timestamp}-${userSuffix}-${randomSuffix}`;
+//     const paymentId = `PAY-${timestamp}-${userSuffix}-${randomSuffix}`;
+
+//     let savedBooking;
+//     let bookingAction = "created";
+
+//     if (isExtension && originalBooking && !duplicateBooking) {
+//       // Extend existing booking
+//       const newCheckIn = new Date(
+//         Math.min(originalBooking.checkInDate.getTime(), checkIn.getTime())
+//       );
+//       const newCheckOut = new Date(
+//         Math.max(originalBooking.checkOutDate.getTime(), checkOut.getTime())
+//       );
+//       const newTotalStay = Math.ceil(
+//         (newCheckOut - newCheckIn) / (1000 * 60 * 60 * 24)
+//       );
+
+//       // Update existing booking
+//       originalBooking.checkInDate = newCheckIn;
+//       originalBooking.checkOutDate = newCheckOut;
+//       originalBooking.totalStay = newTotalStay;
+//       originalBooking.totalAmount = originalBooking.totalAmount + totalAmount;
+
+//       // Update room details if extending with different room configuration
+//       if (quantity > originalBooking.roomDetails.quantity) {
+//         originalBooking.roomDetails.quantity = quantity;
+//       }
+
+//       // Update guests if new booking has more guests
+//       if (guests.adults > originalBooking.guests.adults) {
+//         originalBooking.guests.adults = guests.adults;
+//       }
+//       if (guests.children > originalBooking.guests.children) {
+//         originalBooking.guests.children = guests.children;
+//       }
+//       if (guests.infants > originalBooking.guests.infants) {
+//         originalBooking.guests.infants = guests.infants;
+//       }
+
+//       // Update pet details
+//       if (pets > originalBooking.roomDetails.pets) {
+//         originalBooking.roomDetails.pets = pets;
+//       }
+
+//       // Append special request if provided
+//       if (specialRequest) {
+//         originalBooking.specialRequest = originalBooking.specialRequest
+//           ? `${originalBooking.specialRequest}; ${specialRequest}`
+//           : specialRequest;
+//       }
+
+//       savedBooking = await originalBooking.save({ session });
+//       bookingAction = "extended";
+//     } else {
+//       // Create new booking (including additional rooms for same dates)
+//       const booking = new Booked({
+//         property: propertyId,
+//         userId,
+//         checkInDate: checkIn,
+//         checkOutDate: checkOut,
+//         totalStay,
+//         roomDetails: {
+//           roomType,
+//           quantity,
+//           allowedPersonsPerRoom,
+//           extraPersons,
+//           extraPersonCharge,
+//           isSmokingAllowed,
+//           smokingRoomCharge,
+//           isPetFriendly,
+//           pets,
+//           petFeePerPet,
+//         },
+//         guests: {
+//           adults: guests.adults,
+//           children: guests.children || 0,
+//           infants: guests.infants || 0,
+//         },
+//         specialRequest,
+//         totalAmount,
+//         bookingStatus: "pending",
+//       });
+
+//       savedBooking = await booking.save({ session });
+//       bookingAction = duplicateBooking ? "additional_rooms" : "created";
+//     }
+
+//     // Create order
+//     const order = new Order({
+//       orderId: orderId,
+//       property: propertyId,
+//       customer: {
+//         name: `${firstname || existingUser.firstname} ${
+//           lastname || existingUser.lastname
+//         }`,
+//         email: email || existingUser.email,
+//         phone: phone || existingUser.mobile,
+//       },
+//       booking: {
+//         checkIn: savedBooking.checkInDate,
+//         checkOut: savedBooking.checkOutDate,
+//         guests:
+//           savedBooking.guests.adults +
+//           savedBooking.guests.children +
+//           savedBooking.guests.infants,
+//         nights: savedBooking.totalStay,
+//         rooms: savedBooking.roomDetails.quantity,
+//         roomType: savedBooking.roomDetails.roomType,
+//         specialRequest: savedBooking.specialRequest,
+//       },
+//       payment: {
+//         amount: totalAmount * 100,
+//         currency,
+//         stripePaymentIntentId: "",
+//         stripePaymentStatus: "pending",
+//       },
+//       bookingId: savedBooking._id,
+//       notes: isExtension
+//         ? `Extension payment for existing booking`
+//         : duplicateBooking
+//         ? "Additional rooms for same dates"
+//         : "",
+//       metadata: {
+//         isExtension: isExtension.toString(),
+//         isAdditionalRooms: duplicateBooking ? "true" : "false",
+//         originalBookingId: originalBooking?._id?.toString() || "",
+//         bookingAction: bookingAction,
+//       },
+//     });
+
+//     const savedOrder = await order.save({ session });
+
+//     // Define the base URL for your frontend
+//     const baseUrl = process.env.CLIENT_URL || "http://localhost:3000";
+
+//     // Create detailed line item description
+//     const lineItemDescription = `${totalStay} night(s) stay - ${quantity} ${roomType} room(s) - ${
+//       guests.adults
+//     } adults, ${guests.children || 0} children${
+//       pets > 0 ? `, ${pets} pet(s)` : ""
+//     }${extraPersons > 0 ? `, ${extraPersons} extra person(s)` : ""}${
+//       isSmokingAllowed ? ", smoking allowed" : ""
+//     }`;
+
+//     // Create Stripe Checkout Session
+//     const checkoutSession = await stripe.checkout.sessions.create({
+//       payment_method_types: ["card"],
+//       line_items: [
+//         {
+//           price_data: {
+//             currency: currency,
+//             product_data: {
+//               name: `${property.name} ${
+//                 isExtension
+//                   ? "(Extension)"
+//                   : duplicateBooking
+//                   ? "(Additional Rooms)"
+//                   : ""
+//               }`,
+//               description: isExtension
+//                 ? `Extension: ${lineItemDescription}`
+//                 : duplicateBooking
+//                 ? `Additional Rooms: ${lineItemDescription}`
+//                 : lineItemDescription,
+//               images: property.image ? [property.image] : [],
+//             },
+//             unit_amount: Math.floor(totalAmount) * 100,
+//           },
+//           quantity: 1,
+//         },
+//       ],
+//       mode: "payment",
+//       success_url: `${baseUrl}/payment-success`,
+//       cancel_url: `${baseUrl}`,
+//       metadata: {
+//         orderId: savedOrder._id.toString(),
+//         bookingId: savedBooking._id.toString(),
+//         propertyId: propertyId,
+//         userId: userId,
+//         customOrderId: orderId,
+//         isExtension: isExtension.toString(),
+//         isAdditionalRooms: duplicateBooking ? "true" : "false",
+//         bookingAction: bookingAction,
+//         roomType: roomType,
+//         roomQuantity: quantity.toString(),
+//         userEmail: email || existingUser.email,
+//         userName: `${firstname || existingUser.firstname} ${
+//           lastname || existingUser.lastname
+//         }`,
+//         userPhone: phone || existingUser.mobile,
+//       },
+//       customer_email: email || existingUser.email,
+//       billing_address_collection: "required",
+//       phone_number_collection: {
+//         enabled: true,
+//       },
+//       allow_promotion_codes: true,
+//       automatic_tax: {
+//         enabled: false,
+//       },
+//       custom_text: {
+//         submit: {
+//           message: `Complete your ${
+//             isExtension
+//               ? "extension"
+//               : duplicateBooking
+//               ? "additional room"
+//               : "booking"
+//           } payment securely.`,
+//         },
+//       },
+// <<<<<<< HEAD
+// =======
+      
+// >>>>>>> fe1b62ad6422f3e886831c8b7311b51f531931bd
+//       locale: "auto",
+//       payment_intent_data: {
+//         metadata: {
+//           orderId: savedOrder._id.toString(),
+//           bookingId: savedBooking._id.toString(),
+//           propertyId: propertyId,
+//           userId: userId,
+//           customOrderId: orderId,
+//           isExtension: isExtension.toString(),
+//           isAdditionalRooms: duplicateBooking ? "true" : "false",
+//           bookingAction: bookingAction,
+//           roomType: roomType,
+//           roomQuantity: quantity.toString(),
+//           userEmail: email || existingUser.email,
+//           userName: `${firstname || existingUser.firstname} ${
+//             lastname || existingUser.lastname
+//           }`,
+//           userPhone: phone || existingUser.mobile,
+//         },
+//       },
+//     });
+
+//     // Create payment record
+//     const payment = new Payment({
+//       paymentId: paymentId,
+//       order: savedOrder._id,
+//       stripe: {
+//         paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
+//         clientSecret: checkoutSession.id,
+//         status: "requires_payment_method",
+//       },
+//       amount: Math.floor(totalAmount) * 100,
+//       currency,
+//       netAmount: Math.floor(totalAmount) * 100,
+//       status: "pending",
+//       bookingId: savedBooking._id,
+//     });
+
+//     await payment.save({ session });
+
+//     // Update booking and order with session info
+//     savedBooking.payment = {
+//       paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
+//       paymentStatus: "pending",
+//     };
+
+//     await savedBooking.save({ session });
+
+//     savedOrder.payment.stripePaymentIntentId =
+//       checkoutSession.payment_intent || checkoutSession.id;
+//     await savedOrder.save({ session });
+
+//     await session.commitTransaction();
+
+//     res.status(201).json({
+//       success: true,
+//       message: `Checkout session ${bookingAction} successfully`,
+//       sessionId: checkoutSession.id,
+//       url: checkoutSession.url,
+//       bookingId: savedBooking._id,
+//       orderId: savedOrder._id,
+//       customOrderId: orderId,
+//       bookingAction: bookingAction,
+//       isExtension: isExtension,
+//       isAdditionalRooms: duplicateBooking || false,
+//       roomAvailability: {
+//         availableRooms: roomAvailability.availableRooms,
+//         totalRooms: roomAvailability.totalRooms,
+//         bookedRooms: roomAvailability.roomsBookedInPeriod,
+//       },
+//       redirectUrls: {
+//         success: `${baseUrl}/booking-success?session_id=${checkoutSession.id}&action=${bookingAction}&booking_id=${savedBooking._id}&order_id=${savedOrder._id}`,
+//         cancel: `${baseUrl}/booking-cancel?session_id=${checkoutSession.id}&action=${bookingAction}&booking_id=${savedBooking._id}&property_id=${propertyId}`,
+//         return: `${baseUrl}/confirm?property_id=${propertyId}&check_in=${checkInDate}&check_out=${checkOutDate}&guests=${JSON.stringify(
+//           guests
+//         )}&rooms=${quantity}&room_type=${roomType}`,
+//       },
+//       bookingDetails: {
+//         checkInDate: savedBooking.checkInDate,
+//         checkOutDate: savedBooking.checkOutDate,
+//         totalStay: savedBooking.totalStay,
+//         totalAmount: savedBooking.totalAmount,
+//         currentPaymentAmount: Math.floor(totalAmount),
+//         roomDetails: savedBooking.roomDetails,
+//         guests: savedBooking.guests,
+//       },
+//     });
+//   } catch (error) {
+//     await session.abortTransaction();
+//     console.error("Checkout session creation error:", error);
+
+//     // Handle specific errors
+//     if (
+//       error.message.includes("Not enough rooms available") ||
+//       error.message.includes("Too many guests") ||
+//       error.message.includes("Pets are not allowed") ||
+//       error.message.includes("Too many pets") ||
+//       error.message.includes(
+//         "You already have a booking for this property on the same dates"
+//       )
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: error.message,
+//         redirectUrl: `${
+//           process.env.CLIENT_URL || "http://localhost:3000"
+//         }/confirm`,
+//       });
+//     }
+
+//     if (error.code === 11000) {
+//       console.error("Duplicate key error details:", {
+//         keyPattern: error.keyPattern,
+//         keyValue: error.keyValue,
+//         message: error.message,
+//       });
+
+//       return res.status(400).json({
+//         success: false,
+//         message: "Booking conflict detected. Please try again.",
+//         redirectUrl: `${
+//           process.env.CLIENT_URL || "http://localhost:3000"
+//         }/confirm`,
+//       });
+//     }
+
+//     // Handle Stripe errors
+//     if (
+//       error.type === "StripeCardError" ||
+//       error.type === "StripeInvalidRequestError"
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payment processing error: " + error.message,
+//         redirectUrl: `${
+//           process.env.CLIENT_URL || "http://localhost:3000"
+//         }/confirm`,
+//       });
+//     }
+
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to create checkout session",
+//       error:
+//         process.env.NODE_ENV === "development"
+//           ? error.message
+//           : "Internal server error",
+//       redirectUrl: `${
+//         process.env.CLIENT_URL || "http://localhost:3000"
+//       }/confirm`,
+//     });
+//   } finally {
+//     session.endSession();
+//   }
+// };
+
+
 export const createCheckoutSession = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -1493,7 +2114,19 @@ export const createCheckoutSession = async (req, res) => {
       },
       totalAmount,
       currency = "cad",
+      paymentMethod = "stripe",
     } = req.body;
+
+    const allowedMethods = ["stripe", "cod"];
+    if (!allowedMethods.includes(paymentMethod)) {
+      throw new Error("Invalid payment method");
+    }
+
+    if (paymentMethod === "stripe" && !stripe) {
+      throw new Error("Stripe is not configured");
+    }
+
+    console.log("paymentMethod:", paymentMethod);
 
     // Validate required fields
     if (
@@ -1547,7 +2180,7 @@ export const createCheckoutSession = async (req, res) => {
       session
     );
 
-    console.log(roomAvailability, "roomAvailability");
+    // console.log(roomAvailability, "roomAvailability");
 
     // Validate user exists
     const existingUser = await User.findById(userId).session(session);
@@ -1853,6 +2486,72 @@ export const createCheckoutSession = async (req, res) => {
       isSmokingAllowed ? ", smoking allowed" : ""
     }`;
 
+    // -----------------------------------COD Option ------------------------------------
+
+if (paymentMethod === "cod") {
+  // Update booking
+
+  // const sad= await Payment.deleteMany({ "stripe.paymentIntentId": null }).session(session);
+  // console.log("sad",sad);
+  // 
+  savedBooking.bookingStatus = "confirmed";
+  savedBooking.payment = {
+    paymentMethod: "cod",
+    paymentStatus: "payment_pending",
+    updatedAt: new Date(),
+  };
+  await savedBooking.save({ session });
+
+  // Update order
+  savedOrder.payment = {
+    amount: Math.floor(totalAmount) * 100,
+    currency,
+    paymentMethod: "cod",
+    status: "payment_pending",
+  };
+  savedOrder.status = "confirmed";
+  await savedOrder.save({ session });
+
+  // Create payment record WITHOUT stripe object
+  await Payment.create(
+    [
+      {
+        paymentId,
+        order: savedOrder._id,
+        bookingId: savedBooking._id,
+        paymentMethod: "cod",
+        amount: totalAmount * 100,
+        currency,
+        netAmount: totalAmount * 100,
+        status: "payment_pending",
+        stripe: {
+    paymentIntentId: `cod-${paymentId}`, // unique per COD payment
+  },
+        // ⚠️ do NOT include `stripe` field here
+      },
+    ],
+    { session }
+  );
+
+  await session.commitTransaction();
+sendBookingEmails("confirmed", savedBooking._id).catch(console.error);
+ return res.status(201).json({
+  success: true,
+  message: "Booking confirmed with Cash on Delivery",
+  paymentMethod: "cod",
+  bookingId: savedBooking._id,
+  orderId: savedOrder._id,
+  customOrderId: orderId,
+  bookingAction,
+  url: `${baseUrl}/booking-history`,
+  redirectUrls: {
+    success: `${baseUrl}/booking-history`, // only this
+  },
+});
+
+}
+
+
     // Create Stripe Checkout Session
     const checkoutSession = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -1946,6 +2645,7 @@ export const createCheckoutSession = async (req, res) => {
     const payment = new Payment({
       paymentId: paymentId,
       order: savedOrder._id,
+      paymentMethod: 'card', 
       stripe: {
         paymentIntentId: checkoutSession.payment_intent || checkoutSession.id,
         clientSecret: checkoutSession.id,
@@ -2075,7 +2775,6 @@ export const createCheckoutSession = async (req, res) => {
     session.endSession();
   }
 };
-
 // Utility function to retry operations with exponential backoff
 const retryWithBackoff = async (
   operation,
