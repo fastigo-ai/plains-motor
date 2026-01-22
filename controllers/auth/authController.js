@@ -29,7 +29,7 @@ import bcrypt from 'bcryptjs';
 //       user = new User({
 //         mobile,
 //         name: 'User',
-//         email: `${mobile}@placeholder.com`,
+//         email: `placeholder@example.com`,
 //         password: bcrypt.hashSync('defaultPassword123', 10),
 //         status: 'pending',
 //       });
@@ -144,7 +144,7 @@ export const authenticateWithMobile = async (req, res) => {
       user = new User({
         mobile,
         name: 'User',
-        email: `${mobile}@placeholder.com`,
+        email: `placeholder@example.com`,
         password: bcrypt.hashSync('defaultPassword123', 10),
         isPhoneVerified: true, // Set as verified since we're skipping OTP
         phoneVerifiedAt: new Date(),
